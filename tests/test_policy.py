@@ -50,3 +50,24 @@ def test_each_way_out_for_the_agent_is_caught(edit, finding):
 
 def test_a_comment_cannot_hide_or_add_a_rule():
     assert cp.violations(POLICY + "\n# allow agent_t self:ability { channel_connect:vcan_t };\n") == []
+
+
+def test_a_bus_grant_in_the_same_block_as_a_gain_priv_entry_is_still_caught():
+    """Found in review: the checker skipped any block containing gain_priv, so this grant went unseen."""
+    mutated = POLICY + (
+        "\nallow agent_t self:ability {\n    gain_priv: fe_gate:propose:gate_t\n    channel_connect:vcan_t\n};\n"
+    )
+    assert "agent_t may connect to the bus (vcan_t)" in cp.violations(mutated)
+
+
+def test_a_gain_priv_entry_alone_is_not_a_grant_to_the_type_itself():
+    assert ("user_root_t", "vcan_t") not in cp.connections(POLICY)
+    assert "gain_priv:pathspace,prot_exec,priority,map_fixed,public_channel,channel_connect" in POLICY
+
+
+def test_only_the_body_controller_may_send_the_gate_vehicle_state():
+    assert "state" in cp.gate_perms(POLICY)["body_t"]
+    given = POLICY.replace("    propose\n    await\n};", "    propose\n    await\n    state\n};", 1)
+    assert "agent_t may send the gate vehicle state (fe_gate state)" in cp.violations(given)
+    taken = POLICY.replace("allow body_t gate_t:fe_gate {\n    state\n};", "")
+    assert "body_t cannot send the gate vehicle state (fe_gate state)" in cp.violations(taken)

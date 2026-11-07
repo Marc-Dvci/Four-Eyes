@@ -6,7 +6,9 @@ Rules checked:
   - only gate_t, body_t and ecu_t may connect to vcan_t (the bus);
   - only vcan_t may attach /dev/vcan0;
   - agent_t may connect to gate_t and devb_t only, attaches no path, and holds none of the abilities in FORBIDDEN;
-  - of the fe_gate class, agent_t holds only propose and await; only bridge_t holds submit_turn.
+  - of the fe_gate class, agent_t holds only propose and await; only bridge_t holds submit_turn; only body_t holds
+    state, the gate's one source of vehicle state.
+A gain_priv entry is not a grant to the type itself, but the rest of its block is.
 Exit status 1 and one line per violation.
 """
 
@@ -53,21 +55,28 @@ def ability_blocks(text: str) -> list[tuple[str, str]]:
     ]
 
 
+GAIN_PRIV = re.compile(r"gain_priv\s*:\s*[^\s,]+(?:\s*,\s*[^\s,]+)*")
+
+
+def held(body: str) -> str:
+    """An ability block without its gain_priv entries: gain_priv names what a child may hold, not what this type
+    holds. Everything else in the same block is still a direct grant."""
+    return GAIN_PRIV.sub(" ", body)
+
+
 def connections(text: str) -> set[tuple[str, str]]:
-    pairs = set()
+    pairs: set[tuple[str, str]] = set()
     for client, body in ability_blocks(text):
-        if "gain_priv" in body:
-            continue  # gain_priv names what a child may hold, not what this type holds
-        for m in re.finditer(r"channel_connect\s*:\s*([\w,]+)", body):
+        for m in re.finditer(r"channel_connect\s*:\s*([\w,]+)", held(body)):
             pairs.update((client, t) for t in m.group(1).split(",") if t)
     return pairs
 
 
 def abilities(text: str, type_name: str) -> set[str]:
-    out = set()
+    out: set[str] = set()
     for client, body in ability_blocks(text):
         if client == type_name:
-            out.update(w.split(":")[0] for w in body.split())
+            out.update(w.split(":")[0] for w in held(body).split())
     return out
 
 
@@ -105,6 +114,10 @@ def violations(text: str) -> list[str]:
     for t, p in perms.items():
         if "submit_turn" in p and t != "bridge_t":
             out.append(f"{t} may open requests (fe_gate submit_turn)")
+        if "state" in p and t != "body_t":
+            out.append(f"{t} may send the gate vehicle state (fe_gate state)")
+    if "state" not in perms.get("body_t", set()):
+        out.append("body_t cannot send the gate vehicle state (fe_gate state)")
     if ("gate_t", "vcan_t") not in connections(text):
         out.append("gate_t has no rule to reach the bus")
     return out
