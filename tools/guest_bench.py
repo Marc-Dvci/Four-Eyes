@@ -102,7 +102,7 @@ def run_cases(heldout: bool) -> int:
     EVIDENCE.mkdir(exist_ok=True)
     (EVIDENCE / name).write_text("".join(json.dumps(r, ensure_ascii=True) + "\n" for r in out), encoding="utf-8")
     summarize(out)
-    pull_record("record_after_cases.jsonl")
+    pull_record("record_after_heldout.jsonl" if heldout else "record_after_cases.jsonl")
     return 0
 
 
