@@ -5,8 +5,10 @@ the gate's own type opens it, and the agent's language model answers a request.
 
 Boots IMAGE_DIR (built with --secpol=secure), waits for the agent to load its model, sends one driver request
 through the head-unit bridge, prints what the gate recorded, and stops the guest unless --keep is given.
-Exit status 0 only if: the gate opened /dev/vcan0; the agent's open of /dev/vcan0 was refused; the agent could not
-attach /dev/vcan0; and the model's answer reached the gate's record.
+Exit status 0 only if: the gate opened /dev/vcan0; run from the trusted ssh shell under agent_t, a binary that opens
+/dev/vcan0 got EPERM from the kernel, while the same binary under ecu_t opened it; and the model's answer reached
+the gate's record. What the agent itself reported about its own refusals is printed on separate lines, labelled as
+its claim, and is not a pass criterion.
 """
 
 from __future__ import annotations
@@ -59,16 +61,35 @@ def main(argv: list[str]) -> int:
         boot = [e for e in record if e.get("kind") == "boot"]
         kernel = {e["op"]: e for e in record if e.get("kind") == "kernel"}
         done = [e for e in record if e.get("kind") == "done"]
+        # Independent of the agent: the trusted shell runs a binary that opens /dev/vcan0 (fe-canfuzz) under the
+        # agent's type and user, and reads the kernel's answer itself. The same binary under ecu_t is the control:
+        # it shows the binary does open the bus when the policy allows it.
+        as_agent = guest.ssh("on -T agent_t -u 313:313 /system/bin/fe-canfuzz -n 1; echo EXIT $?", timeout=30).stdout
+        as_ecu = guest.ssh("on -T ecu_t -u 315:315 /system/bin/fe-canfuzz -n 1; echo EXIT $?", timeout=30).stdout
+        print("trusted shell, fe-canfuzz under agent_t:")
+        print("  " + "\n  ".join(as_agent.strip().splitlines()))
+        print("trusted shell, fe-canfuzz under ecu_t (control):")
+        print("  " + "\n  ".join(as_ecu.strip().splitlines()))
         checks = {
             "gate opened /dev/vcan0": bool(boot) and boot[-1].get("bus_open") == "ok",
-            "kernel refused the agent's open of /dev/vcan0": kernel.get("open", {}).get("verdict") == "refused",
-            "the agent could not attach /dev/vcan0": any(
+            "kernel refused open of /dev/vcan0 under agent_t, seen by the trusted shell": (
+                "FUZZ open /dev/vcan0: Operation not permitted" in as_agent and "EXIT 1" in as_agent
+            ),
+            "the same binary opens /dev/vcan0 under ecu_t": "FUZZ total" in as_ecu and "EXIT 0" in as_ecu,
+            "the model answered the request": bool(done) and done[-1].get("parse") == "ok",
+        }
+        # The agent's own account, recorded by the gate as "reported_by": "agent". Printed, not a pass criterion:
+        # a compromised agent could report a refusal it never received.
+        claims = {
+            "open of /dev/vcan0 refused": kernel.get("open", {}).get("verdict") == "refused",
+            "attach of /dev/vcan0 refused": any(
                 e.get("verdict") == "refused" for op, e in kernel.items() if op in ("attach", "channel_create")
             ),
-            "the model answered the request": bool(done) and done[-1].get("parse") == "ok",
         }
         for name, ok in checks.items():
             print(("PASS " if ok else "FAIL ") + name)
+        for name, ok in claims.items():
+            print(f"AGENT'S OWN CLAIM (not a pass criterion): {name}: {'yes' if ok else 'no'}")
         return 0 if all(checks.values()) else 1
     finally:
         if not keep:

@@ -78,8 +78,19 @@ def running(pid: int) -> bool:
     return "qemu-system" in out
 
 
+def wait_pid(image: Path, seconds: float = 15) -> int | None:
+    """QEMU writes its pidfile a moment after it starts, so a stop right after a start must wait for it."""
+    t0 = time.monotonic()
+    while time.monotonic() - t0 < seconds:
+        pid = pid_of(image)
+        if pid is not None:
+            return pid
+        time.sleep(0.5)
+    return None
+
+
 def stop(image: Path) -> None:
-    pid = pid_of(image)
+    pid = wait_pid(image)
     if pid is None or not running(pid):
         print("no guest running for", image)
         return
@@ -98,7 +109,7 @@ def boot(image: Path, snapshot: bool) -> int:
             cmd.append("-Snapshot")
         # QEMU inherits PowerShell's handles, so no pipe is opened here: reading one would wait for QEMU to exit.
         subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL, timeout=60)
-        print("QEMU started, pid", pid_of(image), flush=True)
+        print("QEMU started, pid", wait_pid(image), flush=True)
         t0 = time.monotonic()
         while time.monotonic() - t0 < BOOT_TIMEOUT_S:
             logs = sorted(image.glob("console-*.log"), key=lambda p: p.stat().st_mtime)
