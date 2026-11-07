@@ -13,7 +13,7 @@ trunk moves only if a deterministic gate allows it, and the QNX kernel keeps the
 
 | Track | Built with | Headline result (QEMU, WHPX) |
 |---|---|---|
-| Automotive & Mobility | QNX SDP 8.0: security policy, resource managers, message passing; llama.cpp | **16 of 26 attacks fooled the model. The car carried out 0 of the attackers' actions.** |
+| Automotive & Mobility | QNX SDP 8.0: security policy, resource managers, message passing; llama.cpp | **16 of 26 attacks fooled the model; the gate allowed 0 of the attackers' actions, confirmed against the body controller's own state.** |
 
 > [!TIP]
 > Open the car page with no QNX: `docker build -t four-eyes:demo . && docker run --rm -p 127.0.0.1:8092:8092 four-eyes:demo`,
@@ -153,6 +153,8 @@ on Windows under WHPX.
 
 ```sh
 bash qnx/llm/build_llama.sh                       # fetches llama.cpp at the pinned revision, builds its libraries
+                                                  # (to put them elsewhere: build_llama.sh SRC_DIR BUILD_DIR, then
+                                                  #  qnx/build.sh LLAMA_SRC=SRC_DIR LLAMA_BUILD=BUILD_DIR)
 bash qnx/llm/fetch_model.sh                       # Qwen2.5-1.5B-Instruct Q4_K_M, Apache 2.0
 bash qnx/build.sh                                 # vcand, bodyd, gated, agentd, fe-bridge, fe-canfuzz
 python3 tools/check_policy.py                     # the agent's isolation, checked before building
@@ -160,6 +162,10 @@ FE_STARTUP_OPTS='-f 0,0,200M' bash qnx/image/build.sh ~/Four-Eyes-work/image-sec
     --policy=$PWD/qnx/image/four-eyes.secpol
 bash qnx/image/copy_out.sh ~/Four-Eyes-work/image-secure .guest/image-secure
 ```
+
+`build_llama.sh` ends by listing `src/libllama.a`, `ggml/src/libggml.a`, `ggml/src/libggml-base.a` and
+`ggml/src/libggml-cpu.a` under its build directory (about 9.8 MB, 63 kB, 1.3 MB and 1.8 MB); `qnx/build.sh` then links
+them into `agentd`.
 
 Then on Windows:
 
@@ -176,12 +182,12 @@ $env:FE_GUEST="1"; python -m uvicorn app.server:app --port 8092   # the car page
 
 ```sh
 pip install -r requirements-dev.txt && python -m playwright install chromium
-python -m pytest --cov            # 162 tests: 147 unit · 10 integration · 5 end-to-end in Chromium with axe-core
+python -m pytest --cov            # 163 tests: 148 unit · 10 integration · 5 end-to-end in Chromium with axe-core
 bash scripts/coverage_core.sh     # the C decision core under gcov
 bash scripts/mutants.sh           # breaks gate_core.c ten ways; the tests catch 10 of 10
 ```
 
-Decision core coverage (C, `qnx/core/*.c`, gcov): **95.0 % of lines, 77.3 % of branches**; `gate_core.c` alone 94 %
+Decision core coverage (C, `qnx/core/*.c`, gcov): **95.1 % of lines, 77.1 % of branches**; `gate_core.c` alone 94 %
 of lines and 84 % of branches. Python host side: 89 %. Tests run in random order with no network and no QNX; each
 unit and integration test has 30 seconds, each browser test 60.
 

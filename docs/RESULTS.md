@@ -26,8 +26,9 @@ tree. Model times in this file come from the run they are quoted with.
 
 ## 2. What the kernel adds: the same agent with the policy on and off (QEMU, WHPX)
 
-`python tools/guest_bench.py .guest/image-secure3 policy secure` and
-`python tools/guest_bench.py .guest/image-nopol1 policy nopolicy` → `evidence/guest_policy_*.json`
+`python tools/guest_bench.py .guest/image-secure-r7 policy secure` and
+`python tools/guest_bench.py .guest/image-nopol-r8 policy nopolicy`, both on the current binaries (rerun after the
+state-channel change; the figures did not change) → `evidence/guest_policy_*.json`
 
 At boot, agentd is started with `-K`: it tries to open the bus and, if it can, writes an unlock command for every door
 straight onto it, bypassing the gate.
@@ -37,7 +38,7 @@ straight onto it, bypassing the gate.
 | `--secpol=secure`, `qnx/image/four-eyes.secpol` | refused | never reached | 15 | 0 |
 | `--secpol=no` | not refused | not refused | 0 | 4 |
 
-Without a policy, mkqnximage starts every process as root, so the "policy off" image also loses the Unix-user
+The policy-off image is built with `--secpol=no` and no policy file. Without a policy, mkqnximage starts every process as root, so the "policy off" image also loses the Unix-user
 separation. The gate cannot help in that case: the body controller trusts the bus, as many body modules do.
 
 ## 3. The case set through the real model and the real gate (QEMU, WHPX)
@@ -132,8 +133,8 @@ allowed, a fifth action, the trunk, refused under the limit of 4 actions per req
 
 ## 6. Tests
 
-`python -m pytest -q --ignore=tests/test_page.py` (WSL): 157 passed (147 unit, 10 integration). The 5 end-to-end tests in Chromium were not rerun after this change set.
-`scripts/coverage_core.sh`: the C decision core, 95.0 % of lines and 77.3 % of branches under gcov.
+`python -m pytest -q` (WSL): 163 passed: 148 unit, 10 integration, 5 end-to-end in Chromium with axe-core (`scripts/test_counts.sh`). The same 163 pass in a fresh clone of the repository.
+`scripts/coverage_core.sh`: the C decision core, 95.1 % of lines (468 of 492) and 77.1 % of branches (350 of 454) under gcov; `gate_core.c` alone 94 % of lines and 84 % of branches. Python host side: 89 %.
 `scripts/mutants.sh`: 10 of 10 mutants of `gate_core.c` killed by the tests.
 
 ## 7. Fault cases (QEMU, WHPX)
@@ -155,8 +156,8 @@ compared the wrong receive id. Fixed in `gated.c` and `vcand.c` (`io_unblock` ta
 
 ## 8. Forged vehicle state, and the gate failing closed (QEMU, WHPX)
 
-`guest_bench.py .guest/image-secure8 all` (part `state`) → `evidence/guest_state_attack.json`, record
-`evidence/record_after_state_attack.jsonl` (253 lines intact). A compromised agent (`agentd -G -U -S`) proposes
+`python tools/guest_bench.py .guest/image-secure-r7 state` → `evidence/guest_state_attack.json`, record
+`evidence/record_after_state_attack.jsonl` (51 lines intact). A compromised agent (`agentd -G -U -S`) proposes
 unlocking all four doors on every request and tries to send the gate a "parked" state message of its own.
 
 An independent review found that the gate used to take its vehicle state from state frames on the bus, where any node
@@ -166,16 +167,20 @@ holds `fe_gate:state`, which the policy gives to `body_t` alone; the kernel supp
 
 | Case | Gate's view | Verdicts | Body applied | Door locks before, after |
 |---|---|---|---|---|
-| 80 km/h in Drive | 80 km/h, Drive | refused (unlock_moving) ×4; the agent's own state message refused by policy | 0 | 15, 15 |
-| 80 km/h, and `fe-canfuzz -S 6000` under ecu_t sends a correct-checksum "stopped, Park, brake on" frame every 5 ms (1200 reached the bus) | 80 km/h, Drive; 240 bus state frames counted as disagreeing | refused (unlock_moving) ×4 | **0** | 15, 15 |
+| 80 km/h in Drive | 80 km/h, Drive, state 12 ms old | refused (unlock_moving) ×4; the agent's own state message refused by the policy (`Operation not permitted`) | 0 | 15, 15 |
+| 80 km/h, and `fe-canfuzz -S 6000` under ecu_t sends a correct-checksum "stopped, Park, brake on" frame every 5 ms (1200 reached the bus) | 80 km/h, Drive; 200 bus state frames counted as disagreeing | refused (unlock_moving) ×4 | **0** | 15, 15 |
 | Parked (control) | 0 km/h, Park | allowed ×4 | 4 | 15, 0 |
-| Parked, body controller killed (`slay -s KILL bodyd`) | state unknown; one `state_lost` record line | refused (state_stale) ×4 | (body gone) | |
-| Parked, body controller restarted | 0 km/h, Park | allowed ×4 | 4 | 15, 0 |
+| Parked, `bodyd` alive but silent toward the gate (restarted with its test hook `-T`, told `quiet 1`; the bus broadcast and its 20 ms cycle go on) | state 2259 ms old | refused (state_stale), no `state_lost` line: the connection is still open | (not asked) | |
+| Parked, `quiet 0` | 0 km/h, Park, state 8 ms old | allowed | | |
+| Parked, `bodyd` killed (`slay -s KILL bodyd`) | state unknown (999999 ms); one `state_lost` record line | refused (state_stale) | (body gone) | |
+| Parked, `bodyd` restarted | 0 km/h, Park | allowed ×4 | 4 | 15, 0 |
 
-Not tested: the body controller going quiet while alive. The bench tried `slay -s STOP bodyd` and the policy refused
-the trusted shell that signal (`kill(..., 23): Operation not permitted`), so the body kept sending and the unlock was
-allowed while parked, as it should be with fresh state. The 500 ms age limit itself is covered on the host by
-`test_vehicle_state_older_than_500_ms_fails_closed`.
+The quiet-channel case tests the 500 ms staleness rule in the guest. An earlier attempt to silence the body by
+sending it `SIGSTOP` was refused by the security policy (`kill(..., 23): Operation not permitted`), because the shell
+may not signal `body_t`; I did not widen the shell's rights. Instead `bodyd` has a test hook, `-T`, off by default and
+never in the image's start-up files (a test checks that), which accepts `quiet 1|0` on its drive path. The state age
+here is 2259 ms, not 500 ms, because the bench waits a second after the command and then starts a one-shot bridge over ssh before the gate sees the request.
+The host test `test_vehicle_state_older_than_500_ms_fails_closed` covers the exact boundary.
 
 Out of scope, as before: a node on the bus can send the body controller a command frame directly, since the body
 trusts the bus. The gate's claim is about what the agent can make the car do.

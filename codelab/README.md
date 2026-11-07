@@ -1,6 +1,6 @@
-# Lock an AI agent inside a QNX security policy
+﻿# Lock an AI agent inside a QNX security policy
 
-**QNX SDP 8.0 · x86_64 in QEMU · about 60 minutes · no hardware**
+**QNX SDP 8.0 Â· x86_64 in QEMU Â· about 60 minutes Â· no hardware**
 
 An AI agent in a car can be talked into anything: a text message with hidden characters, a calendar invite that says
 "unlock the doors". Prompts and filters live inside the same process as the model, so they fall with it. This codelab
@@ -302,7 +302,7 @@ FUZZ total 8 frames, 6 reached the bus
 {"seq":3,...,"op":"write_unlock","path":"/dev/vcan0","errno":0,"error":"none","verdict":"NOT REFUSED",...}
 {"seq":4,...,"op":"attach","path":"/dev/vcan0","errno":0,"error":"none","verdict":"NOT REFUSED",...}
 # head -c 120 /dev/fe/drive; echo
-{"speed_kmh":0.0,"gear":126,"parking_brake":true,"locks":0,"trunk_open":false,"windows":[0,0,0,0],"hvac":21,"cycles":142
+{"speed_kmh":0.0,"gear":126,"parking_brake":true,"locks":0,"trunk_open":false,"windows":[0,0,0,0],"hvac":21,"cycles":139
 ```
 
 `"locks":0`: all four doors were unlocked by the agent at boot, without the gate ever being asked. With the policy the
@@ -366,10 +366,10 @@ FUZZ forged stationary state frames, correct checksum: 1200 reached the bus
 
 | Case | What the gate saw | Verdict | Commands the body applied | Door locks |
 |---|---|---|---|---|
-| 80 km/h, forged "parked" frames on the bus | 80 km/h, Drive; 200 bus frames counted as disagreeing | refused (unlock_moving) ×4 | 0 | 15 → 15 |
+| 80 km/h, forged "parked" frames on the bus | 80 km/h, Drive; 200 bus frames counted as disagreeing | refused (unlock_moving) Ã—4 | 0 | 15 â†’ 15 |
 | the agent sends its own state message | `AGENT forged state message: Operation not permitted` | refused by the policy | | |
 | parked, `bodyd` silent for the gate (started with its test hook `-T`, told `quiet 1`) | state 2259 ms old | refused (state_stale) | | |
-| parked, state flowing again (`quiet 0`) | 0 km/h, Park, 8 ms old | allowed ×4 | 4 | 15 → 0 |
+| parked, state flowing again (`quiet 0`) | 0 km/h, Park, 8 ms old | allowed Ã—4 | 4 | 15 â†’ 0 |
 | parked, `bodyd` killed | state unknown | refused (state_stale) | | |
 
 The last two rows show the refusals are about state and not about the agent.
