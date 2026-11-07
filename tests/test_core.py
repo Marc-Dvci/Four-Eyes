@@ -170,6 +170,8 @@ def test_a_flood_is_cut_to_the_bucket_and_refills_at_one_per_second():
     assert len(refused) == 20 - lim.rate_capacity
     # the rate refusal comes first, before any other rule is looked at
     assert g.decide(t, 999, 1, 1000) == fc.Decision(False, "rate")
+    # half a refill period earns half a token, which is not a proposal
+    assert g.decide(t, 999, 1, 1000 + lim.rate_refill_ms // 2) == fc.Decision(False, "rate")
     g.update_vehicle(fc.vehicle(), 1000 + lim.rate_refill_ms)
     assert g.decide(t, LOCK, 1, 1000 + lim.rate_refill_ms).reason != "rate"
     assert g.decide(t, LOCK, 1, 1000 + lim.rate_refill_ms).reason == "rate"
