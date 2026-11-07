@@ -20,9 +20,26 @@ ROOT = Path(__file__).resolve().parent.parent
 DEFAULT = ROOT / "qnx" / "image" / "four-eyes.secpol"
 BUS_CLIENTS = {"gate_t", "body_t", "ecu_t"}
 AGENT_MAY_CONNECT = {"gate_t", "devb_t"}
-FORBIDDEN = {"spawn", "fork", "priority", "mem_phys", "io", "interrupt", "settypeid", "xprocess_query",
-             "xprocess_debug", "xprocess_mem_read", "pathspace", "public_channel", "setuid", "setgid",
-             "network/privport", "network/rawsocket", "network/jailroot", "able_create"}
+FORBIDDEN = {
+    "spawn",
+    "fork",
+    "priority",
+    "mem_phys",
+    "io",
+    "interrupt",
+    "settypeid",
+    "xprocess_query",
+    "xprocess_debug",
+    "xprocess_mem_read",
+    "pathspace",
+    "public_channel",
+    "setuid",
+    "setgid",
+    "network/privport",
+    "network/rawsocket",
+    "network/jailroot",
+    "able_create",
+}
 
 
 def strip(text: str) -> str:
@@ -30,8 +47,10 @@ def strip(text: str) -> str:
 
 
 def ability_blocks(text: str) -> list[tuple[str, str]]:
-    return [(m.group(1), m.group(2)) for m in re.finditer(r"allow\s+(\w+)\s+self\s*:\s*ability\s*\{(.*?)\}\s*;",
-                                                          strip(text), re.S)]
+    return [
+        (m.group(1), m.group(2))
+        for m in re.finditer(r"allow\s+(\w+)\s+self\s*:\s*ability\s*\{(.*?)\}\s*;", strip(text), re.S)
+    ]
 
 
 def connections(text: str) -> set[tuple[str, str]]:
@@ -97,8 +116,10 @@ def main(argv: list[str]) -> int:
     for p in problems:
         print(p)
     if not problems:
-        print(f"{path.name}: only the gate, the body controller and the test ECU reach the bus; the agent reaches the "
-              "gate and its files, and nothing else")
+        print(
+            f"{path.name}: only the gate, the body controller and the test ECU reach the bus; the agent reaches the "
+            "gate and its files, and nothing else"
+        )
     return 1 if problems else 0
 
 

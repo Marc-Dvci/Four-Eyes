@@ -30,8 +30,12 @@ def main() -> int:
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
         port = s.getsockname()[1]
-    server = subprocess.Popen([sys.executable, "-m", "uvicorn", "app.server:app", "--port", str(port)], cwd=ROOT,
-                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    server = subprocess.Popen(
+        [sys.executable, "-m", "uvicorn", "app.server:app", "--port", str(port)],
+        cwd=ROOT,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
     time.sleep(2)
     REC.mkdir(parents=True, exist_ok=True)
     SHOTS.mkdir(parents=True, exist_ok=True)
@@ -39,8 +43,12 @@ def main() -> int:
         with sync_playwright() as p:
             browser = p.chromium.launch()
             for name, label in SCENES:
-                ctx = browser.new_context(viewport={"width": 1280, "height": 760}, device_scale_factor=1,
-                                          record_video_dir=str(REC / name), record_video_size={"width": 1280, "height": 760})
+                ctx = browser.new_context(
+                    viewport={"width": 1280, "height": 760},
+                    device_scale_factor=1,
+                    record_video_dir=str(REC / name),
+                    record_video_size={"width": 1280, "height": 760},
+                )
                 page = ctx.new_page()
                 page.goto(f"http://127.0.0.1:{port}/")
                 page.wait_for_selector(".presets button")

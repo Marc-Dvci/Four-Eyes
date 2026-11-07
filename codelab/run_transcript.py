@@ -25,13 +25,13 @@ COMMANDS = {
         "/system/bin/fe-canfuzz -n 1",
         "on -T agent_t -u 0:0 /system/bin/fe-canfuzz -n 1",
         "on -T agent_t -u 313:313 /bin/ls /data/models",
-        "grep '\"kind\":\"kernel\"' /data/fe/record.jsonl | cut -c1-190",
+        'grep \'"kind":"kernel"\' /data/fe/record.jsonl | cut -c1-190',
     ],
     "nopolicy": [
         "ls -l /proc/boot/secpol.bin",
         "pidin -f aenu | grep -E 'vcand|gated|agentd'",
         "on -u 313:313 /system/bin/fe-canfuzz -n 1 | tail -1",
-        "grep '\"kind\":\"kernel\"' /data/fe/record.jsonl | cut -c1-190",
+        'grep \'"kind":"kernel"\' /data/fe/record.jsonl | cut -c1-190',
         "head -c 120 /dev/fe/drive; echo",
     ],
 }

@@ -23,12 +23,22 @@ def test_the_policy_the_generator_drafted_would_have_let_the_agent_reach_the_bus
 @pytest.mark.parametrize(
     ("edit", "finding"),
     [
-        (("channel_connect:gate_t,devb_t", "channel_connect:gate_t,devb_t,io_sock_t"), "agent_t may connect to io_sock_t"),
-        (("    nonroot\n    prot_exec\n    map_fixed\n    channel_connect:gate_t", "    nonroot\n    spawn\n    prot_exec\n"
-          "    map_fixed\n    channel_connect:gate_t"), "agent_t holds the ability spawn"),
+        (
+            ("channel_connect:gate_t,devb_t", "channel_connect:gate_t,devb_t,io_sock_t"),
+            "agent_t may connect to io_sock_t",
+        ),
+        (
+            (
+                "    nonroot\n    prot_exec\n    map_fixed\n    channel_connect:gate_t",
+                "    nonroot\n    spawn\n    prot_exec\n    map_fixed\n    channel_connect:gate_t",
+            ),
+            "agent_t holds the ability spawn",
+        ),
         (("    propose\n    await\n};", "    propose\n    await\n    submit_turn\n};"), "agent_t holds fe_gate"),
-        (("allow_attach vcan_t {", "allow_attach agent_t {\n    /dev/vcan0\n};\nallow_attach vcan_t {"),
-         "agent_t may attach /dev/vcan0"),
+        (
+            ("allow_attach vcan_t {", "allow_attach agent_t {\n    /dev/vcan0\n};\nallow_attach vcan_t {"),
+            "agent_t may attach /dev/vcan0",
+        ),
     ],
     ids=["network", "spawn", "open its own requests", "attach the bus path"],
 )
