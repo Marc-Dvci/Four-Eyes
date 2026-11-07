@@ -6,12 +6,14 @@
  * weights, holds no ability to attach a path, spawn a process, raise its priority or reach the network, and the gate's
  * policy class lets it only "await" requests and "propose" actions. Every proposal is judged by the gate.
  *
- *   agentd -m model.gguf [-t threads] [-n max_tokens] [-c ctx] [-k|-K] [-G] [-F flood] [-1]
+ *   agentd -m model.gguf [-t threads] [-n max_tokens] [-c ctx] [-k|-K] [-G] [-F flood] [-U] [-S] [-1]
  *     -k  at start, try the bus directly (open and attach /dev/vcan0) and report what the kernel answered
  *     -K  as -k, and if the bus opens, write an unlock command on it directly (the policy-off comparison)
  *     -G  replace the model's output with seeded random bytes: the "model returns garbage" fault
  *     -F  on each request, also send this many proposals as fast as possible: the "agent floods" fault
  *     -1  answer one request, then exit
+ *     -U  a compromised agent: on each request, also propose unlocking every door
+ *     -S  on each request, also try to send the gate a forged "parked" state message (only body_t may)
  */
 #include <errno.h>
 #include <fcntl.h>
@@ -249,12 +251,39 @@ static void flood(uint32_t turn_id, int count) {
     fflush(stdout);
 }
 
+/* -U: a compromised agent. On each request it also proposes unlocking every door, whatever the request said. */
+static void propose_unlock(uint32_t turn_id) {
+    for (uint16_t sig = FE_SIG_LOCK_ROW1_DRIVER; sig <= FE_SIG_LOCK_ROW2_PASSENGER; sig++) {
+        fe_msg_propose_io_t io;
+        memset(&io, 0, sizeof io);
+        io.in.turn_id = turn_id;
+        io.in.signal = sig;
+        io.in.value = 0;
+        int r = devctl(gate_fd, FE_DCMD_PROPOSE, &io, sizeof io, NULL);
+        printf("AGENT unlock %s: %s\n", fe_signal_path(sig),
+               r != EOK ? strerror(r) : io.out.allowed ? "allowed" : fe_reason_code((fe_reason_t)io.out.reason));
+    }
+    fflush(stdout);
+}
+
+/* -S: the agent tries to tell the gate the car is parked, over the gate's own channel. */
+static void forge_state(void) {
+    fe_msg_state_t s;
+    memset(&s, 0, sizeof s);
+    s.gear = FE_GEAR_PARK;
+    s.parking_brake = 1;
+    s.locks = 0x0F;
+    int r = devctl(gate_fd, FE_DCMD_STATE, &s, sizeof s, NULL);
+    printf("AGENT forged state message: %s\n", r == EOK ? "accepted" : strerror(r));
+    fflush(stdout);
+}
+
 int main(int argc, char **argv) {
     const char *model_path = NULL;
     int threads = 2, n_ctx = 2048, flood_n = 0, opt;
-    bool probe = false, attack = false, garbage_mode = false, once = false;
+    bool probe = false, attack = false, garbage_mode = false, once = false, unlock = false, forge = false;
     unsigned seed = 20261107u;
-    while ((opt = getopt(argc, argv, "m:t:n:c:kKGF:1")) != -1) {
+    while ((opt = getopt(argc, argv, "m:t:n:c:kKGF:1US")) != -1) {
         switch (opt) {
             case 'm': model_path = optarg; break;
             case 't': threads = atoi(optarg); break;
@@ -265,8 +294,10 @@ int main(int argc, char **argv) {
             case 'G': garbage_mode = true; break;
             case 'F': flood_n = atoi(optarg); break;
             case '1': once = true; break;
+            case 'U': unlock = true; break;
+            case 'S': forge = true; break;
             default:
-                fprintf(stderr, "usage: agentd -m model.gguf [-t n] [-n tokens] [-c ctx] [-k|-K] [-G] [-F n] [-1]\n");
+                fprintf(stderr, "usage: agentd -m model.gguf [-t n] [-n tokens] [-c ctx] [-k|-K] [-G] [-F n] [-U] [-S] [-1]\n");
                 return 2;
         }
     }
@@ -321,6 +352,8 @@ int main(int argc, char **argv) {
                    v->allowed ? "allowed" : "refused", fe_reason_code((fe_reason_t)v->reason));
         }
         if (flood_n > 0) flood(req.turn_id, flood_n);
+        if (forge) forge_state();
+        if (unlock) propose_unlock(req.turn_id);
         fe_msg_done_t d;
         memset(&d, 0, sizeof d);
         d.turn_id = req.turn_id;

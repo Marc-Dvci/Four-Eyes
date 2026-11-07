@@ -3,7 +3,7 @@
  *
  * It opens requests at the gate on behalf of the driver, passes the driver's controls to the body controller, and
  * streams the gate's record and the vehicle state back. Its type may open requests and read the record; it cannot
- * propose an action and cannot reach the bus.
+ * propose an action and cannot reach the bus. With -D it does not open the body controller.
  *
  * Input lines:
  *   turn driver|message <hex of UTF-8 text>
@@ -17,6 +17,7 @@
  */
 #include <errno.h>
 #include <fcntl.h>
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -56,15 +57,20 @@ static void submit(int gate, const char *origin, const char *hex) {
     printf("T %u %u\n", out->turn_id, out->invisible);
 }
 
-int main(void) {
+int main(int argc, char **argv) {
     setvbuf(stdout, NULL, _IOLBF, 0);
+    /* unbuffered input: with a buffered stdin, fgets pulls several lines into the stdio buffer, select() then reports
+     * nothing to read, and the lines wait there until more input arrives (drive commands were applied late) */
+    setvbuf(stdin, NULL, _IONBF, 0);
+    /* -D: do not open the body controller (a test run while it is stopped, when a read of it would wait) */
+    bool no_drive = argc > 1 && strcmp(argv[1], "-D") == 0;
     int gate = open(FE_GATE_PATH, O_RDWR);
     if (gate < 0) {
         printf("E open %s: %s\n", FE_GATE_PATH, strerror(errno));
         return 1;
     }
-    int drive = open("/dev/fe/drive", O_RDWR);
-    if (drive < 0) printf("E open /dev/fe/drive: %s\n", strerror(errno));
+    int drive = no_drive ? -1 : open("/dev/fe/drive", O_RDWR);
+    if (drive < 0 && !no_drive) printf("E open /dev/fe/drive: %s\n", strerror(errno));
     static fe_msg_read_t rd;
     uint64_t since = 0;
     /* start from the newest lines only: the host asks for history with "history" */

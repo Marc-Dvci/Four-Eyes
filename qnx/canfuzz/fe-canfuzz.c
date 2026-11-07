@@ -5,7 +5,12 @@
  * for the agent. Each frame kind is sent a fixed number of times; the program prints what the bus driver accepted.
  * Whether the body controller then refused them is read from its counters (/dev/fe/drive).
  *
- *   fe-canfuzz [-n count] [-b bus]
+ * Frames are paced, by default one per millisecond (a 500 kbit/s classic CAN bus carries at most about 4 frames per
+ * millisecond). With -g 0 they go as fast as message passing allows, which overflows the body controller's 128-frame
+ * receive queue: vcand then drops the excess for that node and counts it. With -S, it sends only forged state frames
+ * with a correct checksum, for the forged-state attack.
+ *
+ *   fe-canfuzz [-n count] [-g gap_us] [-S forge_ms] [-b bus]
  */
 #include <errno.h>
 #include <fcntl.h>
@@ -40,12 +45,14 @@ static const kind_t KINDS[] = {
 
 int main(int argc, char **argv) {
     const char *bus = "/dev/vcan0";
-    int count = 50, opt;
-    while ((opt = getopt(argc, argv, "n:b:")) != -1) {
+    int count = 50, opt, gap_us = 1000, forge_ms = 0;
+    while ((opt = getopt(argc, argv, "n:b:g:S:")) != -1) {
         if (opt == 'n') count = atoi(optarg);
         else if (opt == 'b') bus = optarg;
+        else if (opt == 'g') gap_us = atoi(optarg);
+        else if (opt == 'S') forge_ms = atoi(optarg);
         else {
-            fprintf(stderr, "usage: fe-canfuzz [-n count] [-b bus]\n");
+            fprintf(stderr, "usage: fe-canfuzz [-n count] [-g gap_us] [-S forge_ms] [-b bus]\n");
             return 2;
         }
     }
@@ -53,6 +60,24 @@ int main(int argc, char **argv) {
     if (fd < 0) {
         printf("FUZZ open %s: %s\n", bus, strerror(errno));
         return 1;
+    }
+    if (forge_ms > 0) {
+        /* A well-formed state frame saying "stopped, in Park, parking brake on", with a correct checksum, every 5 ms:
+         * what a compromised node on the bus can always send. */
+        int sent = 0;
+        for (int t = 0; t < forge_ms; t += 5) {
+            CAN_MSG m;
+            memset(&m, 0, sizeof m);
+            m.mid = FE_CAN_ID_STATE;
+            m.len = 8;
+            uint8_t d[8] = {0, 0, (uint8_t)FE_GEAR_PARK, 1, 0x0F, 0, 0, 0};
+            memcpy(m.dat, d, 8);
+            m.dat[7] = fe_can_checksum(m.dat);
+            if (devctl(fd, CAN_DEVCTL_TX_FRAME_RAW, &m, sizeof m, NULL) == EOK) sent++;
+            usleep(5000);
+        }
+        printf("FUZZ forged stationary state frames, correct checksum: %d reached the bus\n", sent);
+        return 0;
     }
     int total = 0, accepted_total = 0;
     for (size_t k = 0; k < sizeof KINDS / sizeof KINDS[0]; k++) {
@@ -68,6 +93,7 @@ int main(int argc, char **argv) {
             if (devctl(fd, CAN_DEVCTL_TX_FRAME_RAW, &m, sizeof m, NULL) == EOK) accepted++;
             else refused++;
             total++;
+            if (gap_us > 0) usleep((useconds_t)gap_us);
         }
         accepted_total += accepted;
         printf("FUZZ %-40s sent %d: bus accepted %d, bus refused %d\n", KINDS[k].name, count, accepted, refused);
