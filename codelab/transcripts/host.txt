@@ -1,5 +1,5 @@
 # which secpolcompile
-/home/dev/qnx800/host/linux/x86_64/usr/bin/secpolcompile
+~/qnx800/host/linux/x86_64/usr/bin/secpolcompile
 
 # grep -c '' /tmp/codelab/draft.secpol
 577
