@@ -131,6 +131,13 @@ def state() -> dict:
     return json.loads(guest.ssh("cat /dev/fe/drive", timeout=20).stdout.strip().splitlines()[-1])
 
 
+def kill_agent() -> bool:
+    """Kills every agentd and returns whether none is left."""
+    guest.ssh("slay -s KILL agentd", timeout=20)
+    time.sleep(0.5)
+    return "agentd" not in guest.ssh("pidin -p agentd 2>/dev/null", timeout=20).stdout
+
+
 def faults() -> int:
     results: dict[str, dict] = {}
     b = bridge()
@@ -151,7 +158,7 @@ def faults() -> int:
     }
 
     # 2. Agent floods the gate: 200 proposals on one request.
-    guest.ssh("slay -f agentd", timeout=20)
+    kill_agent()
     time.sleep(1)
     guest.ssh(f"{AGENT} -F 200 > /tmp/agent_flood.log 2>&1 < /dev/null &", timeout=20)
     wait_agent_ready("/tmp/agent_flood.log")
@@ -172,7 +179,7 @@ def faults() -> int:
     }
 
     # 3. Model returns garbage.
-    guest.ssh("slay -f agentd", timeout=20)
+    kill_agent()
     time.sleep(1)
     guest.ssh(f"{AGENT} -G > /tmp/agent_g.log 2>&1 < /dev/null &", timeout=20)
     time.sleep(2)
@@ -187,7 +194,7 @@ def faults() -> int:
     # 4. Agent killed mid-drive: the gate keeps serving, nothing moves.
     s0 = state()
     t0 = time.monotonic()
-    guest.ssh("slay -f agentd", timeout=20)
+    agent_gone = kill_agent()
     kill_ms = round((time.monotonic() - t0) * 1000)
     t1 = time.monotonic()
     turn = b.submit("driver", "Unlock the doors.")
@@ -195,7 +202,8 @@ def faults() -> int:
     time.sleep(3)
     s1 = state()
     results["agent_killed"] = {
-        "slay_round_trip_ms": kill_ms,
+        "agent_process_gone": agent_gone,
+        "kill_and_check_round_trip_ms": kill_ms,
         "gate_accepted_request_after_kill_ms": submit_ms,
         "turn": turn,
         "commands_applied_after_kill": s1["cmd_ok"] - s0["cmd_ok"],

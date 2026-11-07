@@ -221,10 +221,11 @@ static int io_close_ocb(resmgr_context_t *ctp, void *reserved, node_t *n) {
 }
 
 static int io_unblock(resmgr_context_t *ctp, io_pulse_t *msg, node_t *n) {
-    (void)msg;
-    if (n->waiting_rcvid == ctp->rcvid) {
+    int rcvid = msg->value.sival_int; /* the client that wants out */
+    (void)ctp;
+    if (n->waiting_rcvid == rcvid) {
         n->waiting_rcvid = 0;
-        MsgError(ctp->rcvid, EINTR);
+        MsgError(rcvid, EINTR);
     }
     return _RESMGR_NOREPLY;
 }

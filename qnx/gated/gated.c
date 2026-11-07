@@ -363,12 +363,15 @@ static int io_close_ocb(resmgr_context_t *ctp, void *reserved, client_t *c) {
 }
 
 static int io_unblock(resmgr_context_t *ctp, io_pulse_t *msg, client_t *c) {
-    (void)msg;
+    /* The unblock pulse carries the rcvid of the client that wants out (a signal, or its process being killed).
+     * Without this reply a killed agent would stay REPLY-blocked on the gate and could not die. */
+    int rcvid = msg->value.sival_int;
+    (void)ctp;
     pthread_mutex_lock(&mu);
-    if (awaiting == c && c->awaiting_rcvid == ctp->rcvid) {
+    if (awaiting == c && c->awaiting_rcvid == rcvid) {
         awaiting = NULL;
         c->awaiting_rcvid = 0;
-        MsgError(ctp->rcvid, EINTR);
+        MsgError(rcvid, EINTR);
     }
     pthread_mutex_unlock(&mu);
     return _RESMGR_NOREPLY;
