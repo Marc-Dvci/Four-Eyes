@@ -80,7 +80,7 @@ const REASON = {
 };
 
 function flash(signal, cls) {
-  let target = $("trunk");
+  let target = signal === "bus" ? $("carbody") : $("trunk");
   Object.keys(SHORT).forEach((p, i) => { if (signal.startsWith(p)) target = doorEls[i].door; });
   target.classList.remove(cls);
   void target.getBBox();
@@ -120,7 +120,7 @@ function onRecord(e) {
     const refused = e.verdict === "refused";
     add(refused ? "kernel" : "allowed", refused ? "Refused by the kernel:" : "NOT refused by the kernel:",
       `the agent tried to ${e.op === "open" ? "open" : e.op === "write_unlock" ? "write an unlock onto" : "take over"} the CAN bus ${e.path} (${e.error}).`, meta);
-    if (refused) flash("Vehicle.Body", "flash-kernel");
+    if (refused) flash("bus", "flash-kernel");
   } else if (e.kind === "turn") {
     const inv = e.invisible ? ` It hides ${e.invisible} invisible characters: “${visible(e.text)}”` : "";
     add("req", e.origin === "driver" ? "Driver:" : "Incoming message:", `“${e.text.replace(/[\u{E0000}-\u{E007F}\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/gu, "")}”${inv}`, meta);

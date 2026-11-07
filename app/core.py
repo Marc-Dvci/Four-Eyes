@@ -101,6 +101,8 @@ class DemoCar:
         self.drive(veh["speed_kmh"], veh["gear"], veh["parking_brake"])
         with self.lock:
             now = self.now_ms()
+            # each preset is a scene of its own: a fresh gate, so one scene's rate budget does not leak into the next
+            self.gate = fecore.Gate(now_ms=now)
             self.gate.update_vehicle(self.v, now)
             turn = self.gate.open_turn(c["origin"], now)
             made = [self._record({"kind": "turn", "turn": turn, "origin": c["origin"],
