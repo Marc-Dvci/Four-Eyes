@@ -3,25 +3,49 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Four Eyes</title>
-    <meta name="description" content="Kernel-enforced limits for in-car AI agents" />
+    <title>Four Eyes: kernel-enforced limits for in-car AI agents</title>
+    <meta name="description" content="An AI agent in the car proposes; a policy gate and the QNX kernel must both agree before a door, window or trunk moves." />
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
-    <!-- The card a pasted link shows (Devpost, Discord, LinkedIn): og:image must be an absolute URL. -->
     <meta property="og:type" content="website" />
     <meta property="og:title" content="Four Eyes" />
-    <meta property="og:description" content="Kernel-enforced limits for in-car AI agents" />
-    <meta property="og:image" content="{{DEMO_URL}}og-card.png" />
+    <meta property="og:description" content="Kernel-enforced limits for in-car AI agents, on QNX 8.0" />
+    <meta property="og:image" content="og-card.png" />
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
-    <main>
+    <header>
       <h1>Four Eyes</h1>
-      <p class="lede">Kernel-enforced limits for in-car AI agents</p>
-      <button id="run" type="button">Run the example</button>
-      <pre id="out" aria-live="polite"></pre>
-      <p class="foot" id="status"></p>
+      <p class="lede">The agent proposes. The gate and the QNX kernel both have to agree.</p>
+      <p class="mode" id="mode" role="status"></p>
+    </header>
+    <main>
+      <section class="car" aria-label="The car">
+        <svg id="car" viewBox="0 0 300 520" role="img" aria-labelledby="car-title">
+          <title id="car-title">Top view of the car: doors, windows and trunk follow the vehicle signals</title>
+          <path class="body" d="M150 18 C215 18 248 52 252 110 L256 420 C256 478 222 504 150 504 C78 504 44 478 44 420 L48 110 C52 52 85 18 150 18 Z" />
+          <rect class="glass" x="78" y="120" width="144" height="70" rx="18" />
+          <rect class="glass" x="84" y="350" width="132" height="54" rx="14" />
+          <g id="doors"></g>
+          <rect id="trunk" class="trunk" x="86" y="440" width="128" height="46" rx="12" />
+          <text x="150" y="468" class="lbl" text-anchor="middle">trunk</text>
+        </svg>
+        <dl class="gauges">
+          <div><dt>Speed</dt><dd><span id="speed">0</span> km/h</dd></div>
+          <div><dt>Gear</dt><dd id="gear">P</dd></div>
+          <div><dt>Parking brake</dt><dd id="brake">on</dd></div>
+          <div><dt>Cabin</dt><dd><span id="hvac">21</span> &deg;C</dd></div>
+        </dl>
+      </section>
+      <section class="talk" aria-label="Requests">
+        <h2>Send the car a request</h2>
+        <p class="hint">Each preset is a case from the labelled attack set: the vehicle state is set first, then the request goes to the agent.</p>
+        <div id="presets" class="presets"></div>
+        <h2>What the gate and the kernel decided</h2>
+        <ol id="feed" class="feed" aria-live="polite"></ol>
+      </section>
     </main>
+    <footer><a href="https://github.com/Marc-Dvci/Four-Eyes">Source and evidence</a></footer>
     <script src="app.js"></script>
   </body>
 </html>

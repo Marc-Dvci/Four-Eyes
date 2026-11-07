@@ -1,54 +1,60 @@
-/* TEMPLATE: neutral placeholder; the project's visual identity replaces it (confirmed with Marc first). */
 :root {
-  --ink: #1f2328;
-  --muted: #57606a;
-  --accent: #0a7d6e;
-  --ground: #ffffff;
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-  color: var(--ink);
-  background: var(--ground);
+  --ground: #0b1220;
+  --ink: #e8edf5;
+  --dim: #8b97ab;
+  --line: #2a3650;
+  --ok: #3ccf91;
+  --gate: #ffb020;
+  --kernel: #ff5a5f;
+  --glass: #5b8def;
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
 }
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --ink: #e6edf3;
-    --muted: #8b949e;
-    --ground: #0d1117;
-  }
-}
-
-main {
-  max-width: 44rem;
-  margin: 12vh auto;
-  padding: 0 1.5rem;
-}
-
-h1 {
-  font-size: 2.6rem;
-  margin: 0 0 0.5rem;
-}
-
-.lede {
-  font-size: 1.2rem;
-  color: var(--muted);
-}
-
-button {
-  font: inherit;
-  padding: 0.6rem 1.2rem;
-  border: 0;
-  border-radius: 999px;
-  background: var(--accent);
-  color: #fff;
-  cursor: pointer;
-}
-
-pre {
-  font-size: 0.9rem;
-  white-space: pre-wrap;
-}
-
-.foot {
-  color: var(--muted);
-  font-size: 0.85rem;
-}
+* { box-sizing: border-box; }
+body { margin: 0; background: radial-gradient(1200px 600px at 30% -10%, #17233d, var(--ground)); color: var(--ink); min-height: 100vh; }
+header { padding: 28px 40px 8px; }
+h1 { margin: 0; font-size: 34px; letter-spacing: 0.04em; }
+.lede { margin: 6px 0 0; color: var(--dim); font-size: 18px; }
+.mode { margin: 10px 0 0; font-size: 14px; color: var(--gate); }
+main { display: grid; grid-template-columns: minmax(300px, 420px) 1fr; gap: 40px; padding: 16px 40px 40px; }
+@media (max-width: 860px) { main { grid-template-columns: 1fr; } }
+.car svg { width: 100%; max-width: 360px; display: block; margin: 0 auto; }
+.body { fill: #1a2438; stroke: #c8d2e3; stroke-width: 3; }
+.glass { fill: #233456; stroke: #4c5f86; }
+.door { fill: none; stroke: #c8d2e3; stroke-width: 3; transition: stroke 0.3s; }
+.door.unlocked { stroke: var(--ok); }
+.win-track { fill: #101828; stroke: #3a4a6a; }
+.win { fill: var(--glass); transition: height 0.4s, y 0.4s; }
+.lock { font-size: 13px; fill: var(--dim); }
+.lock.unlocked { fill: var(--ok); }
+.trunk { fill: #1e2a42; stroke: #c8d2e3; stroke-width: 2; transition: transform 0.4s, fill 0.3s; transform-origin: 150px 440px; }
+.trunk.open { fill: var(--ok); transform: translateY(18px); }
+.lbl { fill: var(--dim); font-size: 12px; }
+.flash-gate { animation: fg 1.2s; }
+.flash-kernel { animation: fk 1.2s; }
+@keyframes fg { 0%, 60% { stroke: var(--gate); stroke-width: 7; } }
+@keyframes fk { 0%, 60% { stroke: var(--kernel); stroke-width: 7; } }
+.gauges { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 18px 0 0; }
+.gauges div { border-top: 2px solid var(--line); padding-top: 6px; }
+.gauges dt { color: var(--dim); font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; }
+.gauges dd { margin: 2px 0 0; font-size: 22px; font-variant-numeric: tabular-nums; }
+h2 { font-size: 15px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--dim); margin: 6px 0 10px; }
+.hint { color: var(--dim); margin: 0 0 12px; font-size: 14px; }
+.presets { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 26px; }
+.presets button { background: transparent; color: var(--ink); border: 1px solid var(--line); border-radius: 999px; padding: 7px 14px; font-size: 14px; cursor: pointer; }
+.presets button:hover, .presets button:focus-visible { border-color: var(--ink); outline: none; }
+.presets button[data-kind="healthy"] { border-color: #2b6e55; }
+.presets button[data-kind="injection"], .presets button[data-kind="invisible"] { border-color: #7a5a1e; }
+.feed { list-style: none; margin: 0; padding: 0; max-height: 62vh; overflow-y: auto; }
+.feed li { padding: 10px 0 10px 14px; border-left: 3px solid var(--line); margin-bottom: 6px; font-size: 15px; line-height: 1.4; }
+.feed li.allowed { border-color: var(--ok); }
+.feed li.gate { border-color: var(--gate); }
+.feed li.kernel { border-color: var(--kernel); }
+.feed .who { font-weight: 600; }
+.feed .gate .who { color: var(--gate); }
+.feed .kernel .who { color: var(--kernel); }
+.feed .allowed .who { color: var(--ok); }
+.feed .meta { color: var(--dim); font-size: 12px; font-family: ui-monospace, Consolas, monospace; word-break: break-all; }
+.feed .req { color: var(--ink); }
+.feed .inv { color: var(--gate); }
+footer { padding: 0 40px 30px; }
+footer a { color: var(--dim); }
