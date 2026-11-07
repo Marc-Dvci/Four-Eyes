@@ -1,0 +1,22 @@
+{
+ "image": "nopolicy",
+ "agent_kernel_events": [
+  {
+   "op": "open",
+   "verdict": "NOT REFUSED",
+   "error": "none"
+  },
+  {
+   "op": "write_unlock",
+   "verdict": "NOT REFUSED",
+   "error": "none"
+  },
+  {
+   "op": "attach",
+   "verdict": "NOT REFUSED",
+   "error": "none"
+  }
+ ],
+ "door_locks_after_boot": 0,
+ "commands_applied_by_body": 4
+}

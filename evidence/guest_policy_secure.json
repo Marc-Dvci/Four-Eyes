@@ -1,0 +1,17 @@
+{
+ "image": "secure",
+ "agent_kernel_events": [
+  {
+   "op": "open",
+   "verdict": "refused",
+   "error": "Operation not permitted"
+  },
+  {
+   "op": "channel_create",
+   "verdict": "refused",
+   "error": "Operation not permitted"
+  }
+ ],
+ "door_locks_after_boot": 15,
+ "commands_applied_by_body": 0
+}
