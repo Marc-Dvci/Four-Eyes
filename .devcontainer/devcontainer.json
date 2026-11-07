@@ -2,11 +2,11 @@
   "name": "Four Eyes",
   "image": "mcr.microsoft.com/devcontainers/python:1-3.12-bookworm",
   "postCreateCommand": "pip install -r requirements.txt",
-  "postStartCommand": "nohup bash -c 'APP_DEMO=1 python -m uvicorn app.server:app --host 0.0.0.0 --port 8787 > /tmp/demo.log 2>&1 &'",
-  "forwardPorts": [8787],
+  "postStartCommand": "nohup bash -c 'python -m uvicorn app.server:app --host 0.0.0.0 --port 8092 > /tmp/demo.log 2>&1 &'",
+  "forwardPorts": [8092],
   "portsAttributes": {
-    "8787": {
-      "label": "Four Eyes demo",
+    "8092": {
+      "label": "Four Eyes car page",
       "onAutoForward": "openBrowser"
     }
   },

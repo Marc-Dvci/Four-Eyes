@@ -3,14 +3,17 @@ message: "If you use Four Eyes or its evaluation, please cite it as below."
 type: software
 title: "Four Eyes: Kernel-enforced limits for in-car AI agents"
 abstract: >-
-  {{ABSTRACT}}
+  An in-car AI agent on QNX 8.0 that may only propose vehicle actions: a deterministic gate decides each one,
+  and the kernel's security policy keeps the agent off the CAN bus. Includes a labelled attack set and its results.
 authors:
   - family-names: Donovici
     given-names: Marc
 version: 1.0.0
-date-released: "{{RELEASE_DATE}}"
+date-released: "2026-12-15"
 license: MIT
 repository-code: "https://github.com/Marc-Dvci/Four-Eyes"
-url: "{{DEMO_URL}}"
 keywords:
-  - "{{KEYWORD}}"
+  - QNX
+  - security policy
+  - prompt injection
+  - automotive
