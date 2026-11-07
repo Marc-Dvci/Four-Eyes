@@ -30,17 +30,20 @@ user_root_t may connect to the bus (vcan_t)
 agent_t may attach /dev/vcan0
 agent_t holds the ability pathspace
 agent_t holds the ability public_channel
+body_t cannot send the gate vehicle state (fe_gate state)
 
 # python3 tools/check_policy.py qnx/image/four-eyes.secpol
 four-eyes.secpol: only the gate, the body controller and the test ECU reach the bus; the agent reaches the gate and its files, and nothing else
 
 # secpolcompile -o /tmp/codelab/secpol.bin /tmp/codelab/four-eyes.secpol && ls -l /tmp/codelab/secpol.bin | awk '{print $5, $9}'
-7264 /tmp/codelab/secpol.bin
+7328 /tmp/codelab/secpol.bin
 
 # secpolcompile -o /tmp/codelab/bad.bin /tmp/codelab/no-gain.secpol
 error: type 'user_root_t' cannot be granted ability 'settypeid:agent_t' as it would gain privileges:
     fe_gate:propose:gate_t, fe_gate:await:gate_t
+error: type 'user_root_t' cannot be granted ability 'settypeid:body_t' as it would gain privileges:
+    fe_gate:state:gate_t
 error: type 'user_root_t' cannot be granted ability 'settypeid:bridge_t' as it would gain privileges:
     fe_gate:submit_turn:gate_t, fe_gate:read:gate_t
-2 errors, 0 warnings
+3 errors, 0 warnings
 

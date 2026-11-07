@@ -1,14 +1,14 @@
 # ls -l /proc/boot/secpol.bin
-ls: /proc/boot/secpol.bin: No such file or directory
+-r-xr-xr-x  1 root root 7328 2026-11-07 04:21 /proc/boot/secpol.bin
 # pidin -f aenu | grep -E 'vcand|gated|agentd'
-  299026       1 system/bin/vcand                                                                  0.040 
-  323605       1 system/bin/gated                                                                  0.010 
-  335894       1 system/bin/agentd                                                                11.768 
+  299026       1 system/bin/vcand                                                                  0.027 
+  323605       1 system/bin/gated                                                                  0.017 
+  335894       1 system/bin/agentd                                                                12.640 
 # on -u 313:313 /system/bin/fe-canfuzz -n 1 | tail -1
 FUZZ total 8 frames, 6 reached the bus
 # grep '"kind":"kernel"' /data/fe/record.jsonl | cut -c1-190
-{"seq":1,"t_ms":2542,"kind":"kernel","by":"kernel","reported_by":"agent","op":"open","path":"/dev/vcan0","errno":0,"error":"none","verdict":"NOT REFUSED","prev":"f39f945bf50c3c8f56d3fa6d2156
-{"seq":2,"t_ms":2547,"kind":"kernel","by":"kernel","reported_by":"agent","op":"write_unlock","path":"/dev/vcan0","errno":0,"error":"none","verdict":"NOT REFUSED","prev":"57df33b4ca86fa18ec41
-{"seq":3,"t_ms":2554,"kind":"kernel","by":"kernel","reported_by":"agent","op":"attach","path":"/dev/vcan0","errno":0,"error":"none","verdict":"NOT REFUSED","prev":"ca78e11497e6309bc28da35cbe
+{"seq":2,"t_ms":2107,"kind":"kernel","by":"kernel","reported_by":"agent","op":"open","path":"/dev/vcan0","errno":0,"error":"none","verdict":"NOT REFUSED","prev":"56c1f2ef914e6a357caee49d0819
+{"seq":3,"t_ms":2111,"kind":"kernel","by":"kernel","reported_by":"agent","op":"write_unlock","path":"/dev/vcan0","errno":0,"error":"none","verdict":"NOT REFUSED","prev":"d0402da3379cffa259b1
+{"seq":4,"t_ms":2117,"kind":"kernel","by":"kernel","reported_by":"agent","op":"attach","path":"/dev/vcan0","errno":0,"error":"none","verdict":"NOT REFUSED","prev":"922325a4892a68109113a2bd83
 # head -c 120 /dev/fe/drive; echo
 {"speed_kmh":0.0,"gear":126,"parking_brake":true,"locks":0,"trunk_open":false,"windows":[0,0,0,0],"hvac":21,"cycles":142

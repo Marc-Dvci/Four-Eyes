@@ -377,16 +377,27 @@ def state_attack() -> int:
     res["parked"] = unlock_turn(b, "parked")
     time.sleep(5)
 
-    # 4. Parked, body controller stopped (SIGSTOP): its channel goes quiet, the state ages past 500 ms, refused.
-    #    A one-shot bridge that does not read the stopped body controller submits the request.
-    set_vehicle(b, {"speed_kmh": 0, "gear": "P", "parking_brake": True})
+    # 4. Parked, body controller alive but silent toward the gate: bodyd restarted with its test hook (-T), told to
+    #    stop its state messages ("quiet 1"; the bus broadcast and the 20 ms cycle go on). The state ages past 500 ms
+    #    and the gate refuses. Then "quiet 0": fresh state again, allowed. The process is never signalled.
     b.close()
-    seq_stop = last_seq() + 1
-    res["stop_signal"] = (
-        guest.ssh("slay -s STOP bodyd; sleep 1; pidin -p bodyd", timeout=20).stdout.strip().splitlines()
+    guest.ssh("slay -s KILL bodyd", timeout=20)
+    time.sleep(1)
+    guest.ssh(
+        "on -T body_t -u 311:311 /system/bin/bodyd -T > /tmp/bodyd_t.log 2>&1 < /dev/null & waitfor /dev/fe/drive 5",
+        timeout=30,
     )
-    res["parked_body_silent"] = unlock_turn_silent("parked, body stopped")
-    guest.ssh("slay -s CONT bodyd", timeout=20)
+    time.sleep(3)
+    drive_oneshot("reset; brake 1; gear P; speed 0 now")
+    drive_oneshot("quiet 1")
+    time.sleep(1)
+    seq_quiet = last_seq() + 1
+    res["parked_body_quiet"] = unlock_turn_silent("parked, body quiet")
+    res["state_lost_lines_while_quiet"] = sum(e.get("kind") == "state_lost" for e in records_since(seq_quiet))
+    res["body_pid_alive_while_quiet"] = "bodyd" in guest.ssh("pidin -p bodyd", timeout=20).stdout
+    drive_oneshot("quiet 0")
+    time.sleep(2)
+    res["parked_body_resumed"] = unlock_turn_silent("parked, body resumed")
     time.sleep(5)
 
     # 5. Parked, body controller killed: the kernel closes its connection, the gate marks state unknown, refused.
@@ -395,9 +406,6 @@ def state_attack() -> int:
     time.sleep(1)
     res["parked_body_killed"] = unlock_turn_silent("parked, body killed")
     res["state_lost_lines_after_kill"] = sum(e.get("kind") == "state_lost" for e in records_since(seq_kill))
-    res["state_lost_lines_while_stopped"] = sum(
-        e.get("kind") == "state_lost" for e in records_since(seq_stop) if e["seq"] < seq_kill
-    )
     guest.ssh(
         "on -T body_t -u 311:311 /system/bin/bodyd > /tmp/bodyd2.log 2>&1 < /dev/null & waitfor /dev/fe/drive 5",
         timeout=30,
@@ -417,6 +425,14 @@ def state_attack() -> int:
     print(json.dumps(res, indent=1, ensure_ascii=True))
     pull_record("record_after_state_attack.jsonl")
     return 0
+
+
+def drive_oneshot(commands: str) -> None:
+    """Driver controls through a one-shot head-unit bridge, without a long-lived one."""
+    lines = "; ".join(f"echo drive {c.strip()}" for c in commands.split(";"))
+    guest.ssh(
+        f"({lines}; sleep 1; echo quit) | on -T bridge_t -u 314:314 /system/bin/fe-bridge > /dev/null 2>&1", timeout=30
+    )
 
 
 def unlock_turn_silent(label: str) -> dict:

@@ -8,7 +8,10 @@
  * The driver's own controls (speed, gear, parking brake) come from the head unit through /dev/fe/drive.
  * The 20 ms cycle runs at a priority the agent cannot reach; every late cycle is counted.
  *
- *   bodyd [-b bus] [-p drive_path] [-P priority] [-g gate_path]
+ *   bodyd [-b bus] [-p drive_path] [-P priority] [-g gate_path] [-T]
+ *   -T  test hook, off by default: accepts "quiet 1|0" on the drive path, which stops (or resumes) the state messages to
+ *       the gate while the bus broadcast and the 20 ms cycle go on. Used by guest_bench.py state to test the gate's
+ *       500 ms staleness rule without signalling the process.
  *   write to /dev/fe/drive: "speed <km/h>", "gear P|R|N|D", "brake 0|1", "reset"
  *   read from /dev/fe/drive: one JSON line with the vehicle state and the cycle counters
  */
@@ -156,6 +159,7 @@ static void *commands(void *arg) {
  * which type sent each message. Runs at the default priority, apart from the 20 ms cycle, so a busy gate cannot make
  * the cycle late; if the gate is not there yet, or restarts, it reconnects. */
 static const char *gate_path = FE_GATE_PATH;
+static bool test_hooks, quiet;
 static uint64_t state_sent, state_failed;
 
 static void *report_state(void *arg) {
@@ -170,6 +174,10 @@ static void *report_state(void *arg) {
             next.tv_sec++;
         }
         clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &next, NULL);
+        pthread_mutex_lock(&mu);
+        bool skip = quiet;
+        pthread_mutex_unlock(&mu);
+        if (skip) continue;
         if (fd < 0) {
             fd = open(gate_path, O_RDWR);
             if (fd < 0) continue;
@@ -218,6 +226,8 @@ static int io_write(resmgr_context_t *ctp, io_write_t *msg, iofunc_ocb_t *ocb) {
         veh.gear = arg[0] == 'P' ? FE_GEAR_PARK : arg[0] == 'R' ? FE_GEAR_REVERSE : arg[0] == 'N' ? FE_GEAR_NEUTRAL : FE_GEAR_DRIVE;
     } else if (strcmp(word, "brake") == 0) {
         veh.parking_brake = atoi(arg) != 0;
+    } else if (test_hooks && strcmp(word, "quiet") == 0) {
+        quiet = atoi(arg) != 0;
     } else if (strcmp(word, "reset") == 0) {
         reset_vehicle();
     } else {
@@ -265,12 +275,13 @@ static int io_read(resmgr_context_t *ctp, io_read_t *msg, iofunc_ocb_t *ocb) {
 int main(int argc, char **argv) {
     const char *bus = "/dev/vcan0", *path = "/dev/fe/drive";
     int prio = 30, opt;
-    while ((opt = getopt(argc, argv, "b:p:P:g:")) != -1) {
+    while ((opt = getopt(argc, argv, "b:p:P:g:T")) != -1) {
         switch (opt) {
             case 'b': bus = optarg; break;
             case 'p': path = optarg; break;
             case 'P': prio = atoi(optarg); break;
             case 'g': gate_path = optarg; break;
+            case 'T': test_hooks = true; break;
             default: fprintf(stderr, "usage: bodyd [-b bus] [-p path] [-P priority] [-g gate]\n"); return 2;
         }
     }

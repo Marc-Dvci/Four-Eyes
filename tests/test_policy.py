@@ -71,3 +71,10 @@ def test_only_the_body_controller_may_send_the_gate_vehicle_state():
     assert "agent_t may send the gate vehicle state (fe_gate state)" in cp.violations(given)
     taken = POLICY.replace("allow body_t gate_t:fe_gate {\n    state\n};", "")
     assert "body_t cannot send the gate vehicle state (fe_gate state)" in cp.violations(taken)
+
+
+def test_the_images_start_the_body_controller_without_its_test_hook():
+    """bodyd -T accepts a command that silences its state messages; only the guest bench starts it that way."""
+    snippets = (cp.ROOT / 'qnx' / 'image' / 'snippets').glob('*.custom')
+    assert all('bodyd -T' not in s.read_text(encoding='utf-8') for s in snippets)
+

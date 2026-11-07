@@ -62,7 +62,7 @@ function describe(signal, value) {
   }
   if (signal === "Vehicle.Body.Trunk.Rear.IsOpen") return value ? "open the trunk" : "close the trunk";
   if (signal.endsWith("Driver.Temperature")) return `cabin to ${value} °C`;
-  if (signal === "unknown") return "change a signal this car does not have";
+  if (signal === "unknown") return "change an unlisted signal";
   return `set ${signal} to ${value}`;
 }
 
