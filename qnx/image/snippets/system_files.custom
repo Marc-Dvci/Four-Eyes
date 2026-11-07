@@ -1,0 +1,9 @@
+# Four Eyes' programs, added to the system partition (/system/bin).
+[uid=0 gid=0 perms=755] bin/vcand=__FE_BUILD__/vcand
+[uid=0 gid=0 perms=755] bin/bodyd=__FE_BUILD__/bodyd
+[uid=0 gid=0 perms=755] bin/gated=__FE_BUILD__/gated
+[uid=0 gid=0 perms=755] bin/agentd=__FE_BUILD__/agentd
+[uid=0 gid=0 perms=755] bin/fe-bridge=__FE_BUILD__/fe-bridge
+[uid=0 gid=0 perms=755] bin/fe-canfuzz=__FE_BUILD__/fe-canfuzz
+# The SDP's OpenSSH runs a separate sshd-auth for each login; post_start.custom links it where sshd looks for it.
+[uid=0 gid=0 perms=755] bin/sshd-auth=usr/libexec/sshd-auth

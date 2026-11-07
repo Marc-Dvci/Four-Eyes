@@ -1,0 +1,4 @@
+# The agent's model and the gate's record directory, on the data partition (/data).
+[uid=0 gid=0 dperms=755 type=dir] models
+[uid=0 gid=0 perms=444] models/agent.gguf=__FE_MODEL__
+[uid=312 gid=312 dperms=700 type=dir] fe

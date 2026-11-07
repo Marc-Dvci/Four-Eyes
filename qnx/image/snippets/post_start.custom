@@ -1,0 +1,13 @@
+# Four Eyes: the bus, the body controller, the gate, then the agent, each under its own security type and user.
+# This SDP's sshd exits at boot without sshd-auth, so it starts again once the helper is linked in.
+ln -sPf /system/bin/sshd-auth /usr/libexec/sshd-auth
+echo "---> Starting sshd with sshd-auth"
+STARTU_P(sshd_t,__SSHD_ID__) /system/bin/sshd -f /system/etc/ssh/sshd_config
+echo "---> Starting Four Eyes"
+STARTU_P(vcan_t,310) /system/bin/vcand &
+waitfor /dev/vcan0 5
+STARTU_P(body_t,311) /system/bin/bodyd &
+waitfor /dev/fe/drive 5
+STARTU_P(gate_t,312) /system/bin/gated -r /data/fe/record.jsonl &
+waitfor /dev/fe/gate 5
+STARTU_P(agent_t,313) /system/bin/agentd -k -m /data/models/agent.gguf -t 2 &
