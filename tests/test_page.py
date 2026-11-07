@@ -55,8 +55,9 @@ def test_the_page_opens_with_the_kernel_refusals_from_the_qnx_run(page):
 @pytest.mark.timeout(60)
 def test_unlock_at_80_kmh_shows_a_gate_refusal_and_the_doors_stay_locked(page):
     page.get_by_role("button", name="Unlock the doors. · 80 km/h").click()
-    page.wait_for_selector(".feed li.gate")
-    assert "not parked" in page.locator(".feed li.gate").first.inner_text()
+    refusal = page.locator(".feed li.gate", has_text="at 80 km/h").first
+    refusal.wait_for()
+    assert "not parked" in refusal.inner_text()
     assert page.locator(".lock").first.text_content() == "locked"
     SHOTS.mkdir(parents=True, exist_ok=True)
     page.screenshot(path=str(SHOTS / "unlock-80.png"))
