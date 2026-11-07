@@ -1,24 +1,9 @@
-# docker compose up demo   no keys                       http://localhost:8080
-# docker compose up app    live features, keys from .env  http://localhost:8787
-#
-# Both listen on this machine only: anyone who can reach `app` can spend your API credit.
-# Add a named volume to `app` if it keeps state.
+# docker compose up demo    the car page with no QNX, at http://127.0.0.1:8092
 services:
   demo:
     build:
       context: .
       target: demo
-    image: "Four-Eyes:demo"
+    image: "four-eyes:demo"
     ports:
-      - "127.0.0.1:8080:8787"
-
-  app:
-    build:
-      context: .
-      target: app
-    image: "Four-Eyes:app"
-    env_file:
-      - path: .env
-        required: false
-    ports:
-      - "127.0.0.1:8787:8787"
+      - "127.0.0.1:8092:8092"

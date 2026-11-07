@@ -1,6 +1,7 @@
-# On every push: lint, format, types, tests with coverage of the decision core, spelling and local links (Python);
-# the web build when there is one; and the Docker image, started and asked for its health and its page.
-# Read-only: nothing here writes to the repository.
+# On every push: lint, format and types (Python); the tests, including the browser tests with axe-core; coverage of
+# the C decision core with gcov and of the Python host side; the case set scored; spelling and links; and the demo
+# Docker image, started and asked for a verdict. The QNX build itself needs the QNX SDP, which a hosted runner does not
+# have: it is built and run locally (README, "Build for QNX"). Read-only: nothing here writes to the repository.
 name: tests
 on:
   push:
@@ -19,12 +20,19 @@ jobs:
           cache: pip
           cache-dependency-path: requirements*.txt
       - run: pip install -r requirements-dev.txt
+      - run: python -m playwright install --with-deps chromium
       - run: ruff check .
       - run: ruff format --check .
       - run: mypy
-      - name: Tests in random order, with line and branch coverage of the decision core
+      - name: Tests in random order, with coverage of the Python host side
         shell: bash
         run: python -m pytest -q --cov --randomly-seed="$GITHUB_RUN_ID" | tee pytest.log
+      - name: Coverage of the C decision core (gcov)
+        run: bash scripts/coverage_core.sh 90
+      - name: The case set, every rule configuration, and the held-out set
+        run: |
+          python tools/score.py
+          python tools/score.py --heldout
       - name: Summary on the run page
         if: always()
         shell: bash
@@ -32,52 +40,28 @@ jobs:
           count() { python -m pytest --collect-only -q -p no:randomly -m "$1" 2>/dev/null | tail -n 1 | grep -Eo '^[0-9]+' || echo 0; }
           {
             echo "### Tests"
-            echo
             grep -E "passed|failed" pytest.log | tail -n 1
-            echo "Random order: replay it with \`python -m pytest --randomly-seed=$GITHUB_RUN_ID\`."
             echo
             echo "| Kind | Tests |"
             echo "|---|---|"
             echo "| Unit | $(count 'not integration and not e2e and not live') |"
             echo "| Integration | $(count integration) |"
-            echo "| End-to-end | $(count e2e) |"
+            echo "| End-to-end (browser) | $(count e2e) |"
             echo
-            echo "### Coverage of the decision core (lines and branches)"
+            echo "### Decision core coverage (C, gcov)"
+            cat build/host/coverage.md || true
             echo
-            python -m coverage report --format=markdown
+            echo "### Case set (gate core, a model that obeys every request)"
+            python tools/score.py
+            python tools/score.py --heldout
           } >> "$GITHUB_STEP_SUMMARY"
       - run: codespell
       - run: python scripts/check_links.py
       - run: python scripts/check_placeholders.py
-  web:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - id: has
-        run: echo "build=$([ -f web/package.json ] && echo yes || echo no)" >> "$GITHUB_OUTPUT"
-      - if: steps.has.outputs.build == 'yes'
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: web/package-lock.json
-      - if: steps.has.outputs.build == 'yes'
-        working-directory: web
-        run: |
-          npm ci
-          npx tsc -b
-          npx eslint src
-          npx vite build
   docker:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: docker build --target demo -t project:demo .
-      - run: docker run -d --name demo -p 127.0.0.1:8787:8787 project:demo
-      - name: The API and the web app answer
-        run: |
-          for i in $(seq 1 30); do curl -fs http://127.0.0.1:8787/api/health > /dev/null && break; sleep 2; done
-          curl -fs http://127.0.0.1:8787/api/health | grep -q '"demo":true'
-          curl -fs http://127.0.0.1:8787/ | grep -q '<title>'
-      - if: failure()
-        run: docker logs demo
+      - run: docker build -t four-eyes:demo .
+      - name: The image starts, serves the page and refuses an unlock at 80 km/h
+        run: bash scripts/docker_smoke.sh four-eyes:demo

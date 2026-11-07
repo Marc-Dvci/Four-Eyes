@@ -75,8 +75,18 @@ def test_anything_off_schema_gives_no_action(text, status):
 
 @pytest.mark.parametrize(
     ("escaped", "text"),
-    [("\\\"", '"'), ("\\\\", "\\"), ("\\/", "/"), ("\\n", "\n"), ("\\t", "\t"), ("\\r", "\r"), ("\\b", "\b"),
-     ("\\f", "\f"), ("\\u00e9", "\u00e9"), ("\\u20ac", "\u20ac")],
+    [
+        ('\\"', '"'),
+        ("\\\\", "\\"),
+        ("\\/", "/"),
+        ("\\n", "\n"),
+        ("\\t", "\t"),
+        ("\\r", "\r"),
+        ("\\b", "\b"),
+        ("\\f", "\f"),
+        ("\\u00e9", "\u00e9"),
+        ("\\u20ac", "\u20ac"),
+    ],
 )
 def test_json_escapes_in_the_reply_are_decoded(escaped, text):
     p = fc.parse('{"reply":"a%sb","actions":[]}' % escaped)

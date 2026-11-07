@@ -59,7 +59,7 @@ if LIVE:  # pragma: no cover - needs the guest
     bridge = GuestBridge([*guest.ssh_args(), "root@127.0.0.1"], on_event=hub.publish)
 
 
-class RequestIn(BaseModel):
+class CarRequest(BaseModel):
     case: str | None = Field(default=None, max_length=16)
     origin: Literal["driver", "message"] = "driver"
     text: str = Field(default="", max_length=1000)
@@ -92,7 +92,7 @@ def state() -> dict[str, Any]:
 
 
 @app.post("/api/request")
-def request(body: RequestIn) -> dict[str, Any]:
+def request(body: CarRequest) -> dict[str, Any]:
     if LIVE:  # pragma: no cover - needs the guest
         c = car.cases.get(body.case or "")
         if c:

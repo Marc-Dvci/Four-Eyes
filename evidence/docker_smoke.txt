@@ -1,0 +1,4 @@
+{"status":"ok","version":"1.0.0","mode":"demo"}
+<title>Four Eyes: kernel-enforced limits for in-car AI agents
+[('DriverSide', 'refused', 'unlock_moving'), ('PassengerSide', 'refused', 'unlock_moving'), ('DriverSide', 'refused', 'unlock_moving'), ('PassengerSide', 'refused', 'unlock_moving')]
+runs as: appuser; compiler in image: none

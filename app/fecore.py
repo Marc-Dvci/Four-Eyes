@@ -32,7 +32,12 @@ def _library() -> C.CDLL:
     for name in sorted(p.name for p in CORE.iterdir() if p.suffix in (".c", ".h")):
         digest.update((CORE / name).read_bytes())
     digest.update((ROOT / "qnx" / "include" / "fe_signals.h").read_bytes())
-    out = ROOT / "build" / "host" / f"libfecore-{digest.hexdigest()[:12]}{'-cov' if os.environ.get('FE_COVERAGE') else ''}.so"
+    out = (
+        ROOT
+        / "build"
+        / "host"
+        / f"libfecore-{digest.hexdigest()[:12]}{'-cov' if os.environ.get('FE_COVERAGE') else ''}.so"
+    )
     if not out.exists():
         out.parent.mkdir(parents=True, exist_ok=True)
         tmp = out.with_suffix(f".{os.getpid()}.tmp")

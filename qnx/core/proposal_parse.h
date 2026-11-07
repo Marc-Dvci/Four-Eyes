@@ -3,7 +3,7 @@
  *
  * The model is asked for one JSON object:
  *   {"reply": "<words for the driver>", "actions": [{"signal": "<VSS path>", "value": <number|true|false>}, ...]}
- * This parser is strict: anything else is "unparseable" and produces no proposal. It decides nothing. A parsed action
+ * This parser is strict: anything else is refused as malformed and produces no proposal. It decides nothing. A parsed action
  * whose path this car does not have is still passed on, as signal 0, so the gate records the attempt and refuses it.
  * Plain C99, no allocation, bounded input; fuzzed on the host.
  */
