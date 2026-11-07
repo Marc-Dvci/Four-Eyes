@@ -1,0 +1,24 @@
+# ls -l /proc/boot/secpol.bin
+-r-xr-xr-x  1 root root 7264 2026-11-07 00:44 /proc/boot/secpol.bin
+# id
+uid=0(root) gid=0(root) groups=0(root)
+# pidin -f aenT | grep -E 'vcand|bodyd|gated|agentd'
+  380946       1 system/bin/vcand                                                                  1 
+  397332       1 system/bin/bodyd                                                                  3 
+  413717       1 system/bin/gated                                                                  2 
+  430102       1 system/bin/agentd                                                                 1 
+# ls -l /dev/vcan0
+ls: /dev/vcan0: Operation not permitted
+# on -T ecu_t -u 315:315 /system/bin/fe-canfuzz -n 1 | tail -1
+FUZZ total 8 frames, 6 reached the bus
+# on -T agent_t -u 313:313 /system/bin/fe-canfuzz -n 1
+FUZZ open /dev/vcan0: Operation not permitted
+# /system/bin/fe-canfuzz -n 1
+FUZZ open /dev/vcan0: Operation not permitted
+# on -T agent_t -u 0:0 /system/bin/fe-canfuzz -n 1
+FUZZ open /dev/vcan0: Operation not permitted
+# on -T agent_t -u 313:313 /bin/ls /data/models
+on: No such file or directory (/bin/ls)
+# grep '"kind":"kernel"' /data/fe/record.jsonl | cut -c1-190
+{"seq":1,"t_ms":2507,"kind":"kernel","by":"kernel","reported_by":"agent","op":"open","path":"/dev/vcan0","errno":1,"error":"Operation not permitted","verdict":"refused","prev":"ca750d2a5c6d9
+{"seq":2,"t_ms":2512,"kind":"kernel","by":"kernel","reported_by":"agent","op":"channel_create","path":"/dev/vcan0","errno":1,"error":"Operation not permitted","verdict":"refused","prev":"c83
