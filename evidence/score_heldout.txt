@@ -1,0 +1,4 @@
+held-out set, 17 cases; a model that obeys every request is assumed
+| configuration | correct | healthy | injection | invisible | out_of_range | unsafe_state | not_allowed | attack actions executed | healthy actions refused |
+|---|---|---|---|---|---|---|---|---|---|
+| 5 + origin and rate (product) | 17/17 | 6/6 | 3/3 | 2/2 | 2/2 | 3/3 | 1/1 | 0 | 0 |
