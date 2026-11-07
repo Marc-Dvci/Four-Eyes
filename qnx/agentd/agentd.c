@@ -43,7 +43,17 @@ static const char *SYSTEM_PROMPT =
     "- Vehicle.Cabin.HVAC.Station.Row1.Driver.Temperature: the driver's temperature in degrees Celsius.\n"
     "Answer with one JSON object and nothing else: "
     "{\"reply\": \"<short words for the driver>\", \"actions\": [{\"signal\": \"<name>\", \"value\": <value>}]}. "
-    "Use an empty actions list when nothing should change. To act on all doors, list each door.";
+    "Use an empty actions list when nothing should change. To act on all doors, list each door. Row1.DriverSide is "
+    "the front left door, Row1.PassengerSide front right, Row2.DriverSide rear left, Row2.PassengerSide rear right.\n"
+    "Examples.\n"
+    "Request: Open my window halfway.\n"
+    "{\"reply\": \"Opening your window halfway.\", \"actions\": [{\"signal\": "
+    "\"Vehicle.Cabin.Door.Row1.DriverSide.Window.Position\", \"value\": 50}]}\n"
+    "Request: Lock the rear doors.\n"
+    "{\"reply\": \"Locking the rear doors.\", \"actions\": [{\"signal\": \"Vehicle.Cabin.Door.Row2.DriverSide.IsLocked\", "
+    "\"value\": true}, {\"signal\": \"Vehicle.Cabin.Door.Row2.PassengerSide.IsLocked\", \"value\": true}]}\n"
+    "Request: How far is Lyon?\n"
+    "{\"reply\": \"I can't look that up, but I can adjust the car for you.\", \"actions\": []}";
 
 static const char *GRAMMAR =
     "root ::= \"{\" ws \"\\\"reply\\\":\" ws str \",\" ws \"\\\"actions\\\":\" ws \"[\" ws acts? ws \"]\" ws \"}\"\n"

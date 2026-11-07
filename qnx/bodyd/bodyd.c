@@ -157,12 +157,13 @@ static int io_write(resmgr_context_t *ctp, io_write_t *msg, iofunc_ocb_t *ocb) {
     if (len >= sizeof buf) return E2BIG;
     if (resmgr_msgget(ctp, buf, len, sizeof(msg->i)) != (ssize_t)len) return EFAULT;
     buf[len] = '\0';
-    char word[16] = "", arg[16] = "";
-    sscanf(buf, "%15s %15s", word, arg);
+    char word[16] = "", arg[16] = "", arg2[16] = "";
+    sscanf(buf, "%15s %15s %15s", word, arg, arg2);
     pthread_mutex_lock(&mu);
     if (strcmp(word, "speed") == 0) {
         int kmh = atoi(arg);
         speed_target_dkmh = (uint16_t)(kmh < 0 ? 0 : kmh > 250 ? 2500 : kmh * 10);
+        if (strcmp(arg2, "now") == 0) veh.speed_dkmh = speed_target_dkmh; /* test runs: no ramp */
     } else if (strcmp(word, "gear") == 0) {
         veh.gear = arg[0] == 'P' ? FE_GEAR_PARK : arg[0] == 'R' ? FE_GEAR_REVERSE : arg[0] == 'N' ? FE_GEAR_NEUTRAL : FE_GEAR_DRIVE;
     } else if (strcmp(word, "brake") == 0) {
