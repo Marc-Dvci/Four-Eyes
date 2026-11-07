@@ -62,7 +62,8 @@ function describe(signal, value) {
   }
   if (signal === "Vehicle.Body.Trunk.Rear.IsOpen") return value ? "open the trunk" : "close the trunk";
   if (signal.endsWith("Driver.Temperature")) return `cabin to ${value} °C`;
-  return `${signal} = ${value}`;
+  if (signal === "unknown") return "change a signal this car does not have";
+  return `set ${signal} to ${value}`;
 }
 
 const REASON = {
@@ -126,9 +127,9 @@ function onRecord(e) {
     add("req", e.origin === "driver" ? "Driver:" : "Incoming message:", `“${e.text.replace(/[\u{E0000}-\u{E007F}\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/gu, "")}”${inv}`, meta);
   } else if (e.kind === "proposal") {
     const what = describe(e.signal, e.value);
-    if (e.verdict === "allowed") add("allowed", "Allowed:", what + ".", meta);
+    if (e.verdict === "allowed") add("allowed", "Allowed:", `the agent proposed to ${what}.`, meta);
     else {
-      add("gate", "Refused by the gate:", `${what} at ${Number(e.speed_kmh).toFixed(0)} km/h: ${REASON[e.reason] || e.reason}.`, meta);
+      add("gate", "Refused by the gate:", `the agent proposed to ${what} at ${Number(e.speed_kmh).toFixed(0)} km/h, but ${REASON[e.reason] || e.reason}.`, meta);
       flash(e.signal, "flash-gate");
     }
   } else if (e.kind === "done" && e.actions === 0) {
