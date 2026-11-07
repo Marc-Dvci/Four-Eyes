@@ -10,4 +10,4 @@ STARTU_P(body_t,311) /system/bin/bodyd &
 waitfor /dev/fe/drive 5
 STARTU_P(gate_t,312) /system/bin/gated -r /data/fe/record.jsonl &
 waitfor /dev/fe/gate 5
-STARTU_P(agent_t,313) /system/bin/agentd -k -m /data/models/agent.gguf -t 2 &
+STARTU_P(agent_t,313) /system/bin/agentd -K -m /data/models/agent.gguf -t 2 &

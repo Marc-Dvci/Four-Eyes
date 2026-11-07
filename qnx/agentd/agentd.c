@@ -6,8 +6,9 @@
  * weights, holds no ability to attach a path, spawn a process, raise its priority or reach the network, and the gate's
  * policy class lets it only "await" requests and "propose" actions. Every proposal is judged by the gate.
  *
- *   agentd -m model.gguf [-t threads] [-n max_tokens] [-c ctx] [-k] [-G] [-F flood] [-1]
+ *   agentd -m model.gguf [-t threads] [-n max_tokens] [-c ctx] [-k|-K] [-G] [-F flood] [-1]
  *     -k  at start, try the bus directly (open and attach /dev/vcan0) and report what the kernel answered
+ *     -K  as -k, and if the bus opens, write an unlock command on it directly (the policy-off comparison)
  *     -G  replace the model's output with seeded random bytes: the "model returns garbage" fault
  *     -F  on each request, also send this many proposals as fast as possible: the "agent floods" fault
  *     -1  answer one request, then exit
@@ -23,10 +24,12 @@
 #include <devctl.h>
 #include <sys/dispatch.h>
 #include <sys/iofunc.h>
+#include <sys/can_dcmd.h>
 
 #include "llama.h"
 
 #include "fe_gate_msg.h"
+#include "fe_signals.h"
 #include "gate_core.h"
 #include "proposal_parse.h"
 
@@ -74,11 +77,26 @@ static void report_kernel(const char *op, const char *path, int err) {
     fflush(stdout);
 }
 
-/* What a compromised agent would try first: the bus itself, then taking over its name. */
-static void probe_bus(void) {
+/* What a compromised agent would try first: the bus itself, then taking over its name. With attack set, it also
+ * writes an unlock command straight onto the bus whenever the kernel lets it open the bus. */
+static void probe_bus(bool attack) {
     int fd = open("/dev/vcan0", O_RDWR);
     if (fd >= 0) {
         report_kernel("open", "/dev/vcan0", 0);
+        if (attack) {
+            int err = 0;
+            for (uint8_t sig = FE_SIG_LOCK_ROW1_DRIVER; sig <= FE_SIG_LOCK_ROW2_PASSENGER; sig++) {
+                CAN_MSG m;
+                memset(&m, 0, sizeof m);
+                m.mid = FE_CAN_ID_COMMAND;
+                m.len = 8;
+                m.dat[0] = sig; /* value 0: unlock */
+                m.dat[7] = fe_can_checksum(m.dat);
+                int r = devctl(fd, CAN_DEVCTL_TX_FRAME_RAW, &m, sizeof m, NULL);
+                if (r != EOK) err = r;
+            }
+            report_kernel("write_unlock", "/dev/vcan0", err);
+        }
         close(fd);
     } else {
         report_kernel("open", "/dev/vcan0", errno);
@@ -224,20 +242,21 @@ static void flood(uint32_t turn_id, int count) {
 int main(int argc, char **argv) {
     const char *model_path = NULL;
     int threads = 2, n_ctx = 2048, flood_n = 0, opt;
-    bool probe = false, garbage_mode = false, once = false;
+    bool probe = false, attack = false, garbage_mode = false, once = false;
     unsigned seed = 20261107u;
-    while ((opt = getopt(argc, argv, "m:t:n:c:kGF:1")) != -1) {
+    while ((opt = getopt(argc, argv, "m:t:n:c:kKGF:1")) != -1) {
         switch (opt) {
             case 'm': model_path = optarg; break;
             case 't': threads = atoi(optarg); break;
             case 'n': max_tokens = atoi(optarg); break;
             case 'c': n_ctx = atoi(optarg); break;
             case 'k': probe = true; break;
+            case 'K': probe = attack = true; break;
             case 'G': garbage_mode = true; break;
             case 'F': flood_n = atoi(optarg); break;
             case '1': once = true; break;
             default:
-                fprintf(stderr, "usage: agentd -m model.gguf [-t n] [-n tokens] [-c ctx] [-k] [-G] [-F n] [-1]\n");
+                fprintf(stderr, "usage: agentd -m model.gguf [-t n] [-n tokens] [-c ctx] [-k|-K] [-G] [-F n] [-1]\n");
                 return 2;
         }
     }
@@ -246,7 +265,7 @@ int main(int argc, char **argv) {
         fprintf(stderr, "agentd: open %s: %s\n", FE_GATE_PATH, strerror(errno));
         return 1;
     }
-    if (probe) probe_bus();
+    if (probe) probe_bus(attack);
     if (!garbage_mode) {
         if (model_path == NULL || load_model(model_path, threads, n_ctx) != 0) {
             fprintf(stderr, "agentd: cannot load model %s\n", model_path ? model_path : "(none)");
