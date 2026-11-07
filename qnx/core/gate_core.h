@@ -10,6 +10,7 @@
 #define FE_GATE_CORE_H
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #include "fe_signals.h"
@@ -69,7 +70,16 @@ typedef struct {
     uint16_t window_fast_dkmh;     /* above this speed a window may open at most window_fast_max */
     uint8_t window_fast_max;
     int8_t hvac_min, hvac_max;
+    uint32_t rules;                /* FE_RULE_* bits in force; FE_RULES_ALL in the product, fewer only for ablations */
 } fe_limits_t;
+
+/* Rule groups, so the evaluation can measure what each one adds. The allowlist is always in force. */
+#define FE_RULE_BOUNDS 0x01u  /* value ranges */
+#define FE_RULE_TURN 0x02u    /* an open request, within its budget */
+#define FE_RULE_ORIGIN 0x04u  /* a request carrying outside text moves nothing */
+#define FE_RULE_STATE 0x08u   /* fresh vehicle state, and the speed, gear and brake conditions */
+#define FE_RULE_RATE 0x10u    /* the token bucket */
+#define FE_RULES_ALL 0x1Fu
 
 typedef struct {
     fe_limits_t lim;
@@ -90,6 +100,7 @@ typedef struct {
 } fe_gate_t;
 
 void fe_limits_default(fe_limits_t *lim);
+size_t fe_gate_sizeof(void); /* for callers that hold the gate as an opaque buffer (the host bindings) */
 void fe_gate_init(fe_gate_t *g, const fe_limits_t *lim, uint64_t now_ms);
 
 /* Opens a request from the head unit; any request still open is closed. Returns its id (never 0). */

@@ -94,6 +94,8 @@ const char *fe_origin_name(fe_origin_t o) {
     }
 }
 
+size_t fe_gate_sizeof(void) { return sizeof(fe_gate_t); }
+
 void fe_limits_default(fe_limits_t *lim) {
     lim->rate_capacity = 6;
     lim->rate_refill_ms = 1000;
@@ -105,6 +107,7 @@ void fe_limits_default(fe_limits_t *lim) {
     lim->window_fast_max = 30;
     lim->hvac_min = 16;
     lim->hvac_max = 28;
+    lim->rules = FE_RULES_ALL;
 }
 
 void fe_gate_init(fe_gate_t *g, const fe_limits_t *lim, uint64_t now_ms) {
@@ -160,18 +163,24 @@ static fe_verdict_t refuse(fe_reason_t r) {
 }
 
 fe_verdict_t fe_gate_decide(fe_gate_t *g, const fe_proposal_t *p, uint64_t now_ms) {
+    const uint32_t rules = g->lim.rules;
     /* 1. Rate first: a flood is refused before anything else is looked at. */
-    if (!take_token(g, now_ms)) return refuse(FE_R_RATE);
+    if ((rules & FE_RULE_RATE) && !take_token(g, now_ms)) return refuse(FE_R_RATE);
     /* 2. Allowlist and bounds. */
     const sig_row_t *row = row_of(p->signal);
     if (row == NULL) return refuse(FE_R_UNKNOWN_SIGNAL);
     if (!row->writable) return refuse(FE_R_NOT_ALLOWED);
-    if (p->value < row->min || p->value > row->max) return refuse(FE_R_OUT_OF_RANGE);
+    if ((rules & FE_RULE_BOUNDS) && (p->value < row->min || p->value > row->max)) return refuse(FE_R_OUT_OF_RANGE);
     /* 3. The request: open, current, from the driver alone, within its budget. */
     if (g->turn_open && now_ms - g->turn_opened_ms > g->lim.turn_timeout_ms) g->turn_open = false;
-    if (!g->turn_open || p->turn_id != g->turn_id) return refuse(FE_R_NO_TURN);
-    if (g->turn_origin != FE_ORIGIN_DRIVER) return refuse(FE_R_FROM_MESSAGE);
-    if (g->turn_used >= g->lim.turn_budget) return refuse(FE_R_TURN_BUDGET);
+    if ((rules & FE_RULE_TURN) && (!g->turn_open || p->turn_id != g->turn_id)) return refuse(FE_R_NO_TURN);
+    if ((rules & FE_RULE_ORIGIN) && g->turn_origin != FE_ORIGIN_DRIVER) return refuse(FE_R_FROM_MESSAGE);
+    if ((rules & FE_RULE_TURN) && g->turn_used >= g->lim.turn_budget) return refuse(FE_R_TURN_BUDGET);
+    if (!(rules & FE_RULE_STATE)) {
+        g->turn_used++;
+        fe_verdict_t ok = {true, FE_OK};
+        return ok;
+    }
     /* 4. The vehicle state, fresh from the bus. */
     if (!g->vehicle_known || now_ms - g->vehicle_ms > g->lim.state_max_age_ms) return refuse(FE_R_STATE_STALE);
     switch (p->signal) {
