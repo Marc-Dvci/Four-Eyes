@@ -41,8 +41,11 @@ def main(argv: list[str]) -> int:
             f"(echo turn driver {hexed(request)}; sleep 45; echo quit) | on -T bridge_t -u 314:314 /system/bin/fe-bridge",
             timeout=90,
         )
-        record = [json.loads(line) for line in guest.ssh("cat /data/fe/record.jsonl", timeout=20).stdout.splitlines()
-                  if line.startswith("{")]
+        record = [
+            json.loads(line)
+            for line in guest.ssh("cat /data/fe/record.jsonl", timeout=20).stdout.splitlines()
+            if line.startswith("{")
+        ]
         whoami = guest.ssh("pidin -f aenT 2>/dev/null | grep -E 'vcand|bodyd|gated|agentd'", timeout=20).stdout
         print("processes (pid, parent, name, security type id):")
         print(whoami.rstrip())

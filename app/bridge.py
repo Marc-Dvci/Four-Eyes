@@ -57,8 +57,14 @@ def drive_command(cmd: str) -> str:
 class GuestBridge:
     def __init__(self, ssh_argv: list[str], on_event: Callable[[str, Any], None] | None = None) -> None:
         self.proc = subprocess.Popen(
-            [*ssh_argv, BRIDGE_CMD], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-            text=True, encoding="utf-8", errors="replace", bufsize=1,
+            [*ssh_argv, BRIDGE_CMD],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            bufsize=1,
         )
         self.on_event = on_event
         self.state: dict[str, Any] = {}

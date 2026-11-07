@@ -2,14 +2,14 @@
 
 [tool.ruff]
 line-length = 120
-target-version = "py312"
+target-version = "py310"
 
 [tool.ruff.lint]
 # pycodestyle errors, pyflakes, bugbear, import order
 select = ["E4", "E7", "E9", "F", "B", "I"]
 
 [tool.mypy]
-files = ["app"]
+files = ["app", "tools/score.py", "tools/fe_verify.py"]
 strict = true
 
 [tool.pytest.ini_options]
@@ -32,10 +32,10 @@ source = ["app"]
 branch = true
 
 [tool.coverage.report]
-# TEMPLATE: list the decision core here (the modules whose rules decide outcomes), and publish this figure under
-# that name ("decision core coverage"), never the total.
-include = ["*/app/core.py"]
-fail_under = 90
+# The decision core is C (qnx/core), measured with gcov by scripts/coverage_core.sh. This figure is the Python host
+# side: the ctypes bindings, the demo car and the server. The guest-only bridge is excluded.
+omit = ["*/app/bridge.py"]
+fail_under = 85
 show_missing = true
 
 [tool.codespell]

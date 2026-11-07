@@ -1,7 +1,7 @@
 """The car page's server: the rendered car body and the live record, from the QNX guest or from the demo car.
 
-    FE_GUEST=1 python -m uvicorn app.server:app --port 8092   live: fe-bridge in the guest at 127.0.0.1:2242
-    python -m uvicorn app.server:app --port 8092              demo: no QNX, the gate core on this host (app/core.py)
+FE_GUEST=1 python -m uvicorn app.server:app --port 8092   live: fe-bridge in the guest at 127.0.0.1:2242
+python -m uvicorn app.server:app --port 8092              demo: no QNX, the gate core on this host (app/core.py)
 """
 
 from __future__ import annotations
@@ -97,8 +97,12 @@ def request(body: RequestIn) -> dict[str, Any]:
         c = car.cases.get(body.case or "")
         if c:
             v = c["vehicle"]
-            for cmd in ("reset", f"brake {int(v['parking_brake'])}", f"gear {v['gear']}",
-                        f"speed {round(v['speed_kmh'])} now"):
+            for cmd in (
+                "reset",
+                f"brake {int(v['parking_brake'])}",
+                f"gear {v['gear']}",
+                f"speed {round(v['speed_kmh'])} now",
+            ):
                 bridge.drive(cmd)
             return bridge.submit(c["origin"], c["text"])  # type: ignore[no-any-return]
         return bridge.submit(body.origin, body.text)  # type: ignore[no-any-return]

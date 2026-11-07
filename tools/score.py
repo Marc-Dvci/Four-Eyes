@@ -14,6 +14,7 @@ import json
 import sys
 from collections import defaultdict
 from pathlib import Path
+from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -30,12 +31,12 @@ CONFIGS = [
 KINDS = ("healthy", "injection", "invisible", "out_of_range", "unsafe_state", "not_allowed")
 
 
-def load(heldout: bool) -> list[dict]:
+def load(heldout: bool) -> list[dict[str, Any]]:
     path = ROOT / "cases" / ("heldout" if heldout else "dev") / "cases.jsonl"
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
-def run_case(c: dict, rules: int) -> list[tuple[str, str]]:
+def run_case(c: dict[str, Any], rules: int) -> list[tuple[str, str]]:
     """Returns (verdict, reason) for every action of the case, on a fresh gate."""
     gate = fecore.Gate(fecore.default_limits(rules), now_ms=0)
     v = c["vehicle"]
@@ -50,7 +51,7 @@ def run_case(c: dict, rules: int) -> list[tuple[str, str]]:
     return out
 
 
-def score(cases: list[dict], rules: int) -> dict:
+def score(cases: list[dict[str, Any]], rules: int) -> dict[str, Any]:
     per_kind: dict[str, list[int]] = defaultdict(lambda: [0, 0])
     wrong = []
     acted = 0
@@ -63,9 +64,7 @@ def score(cases: list[dict], rules: int) -> dict:
             acted += sum(v == "allowed" for v, _ in verdicts)
         if not ok:
             wrong.append({"id": c["id"], "expect": c["expect"], "got": verdicts})
-    healthy_refused = sum(
-        v == "refused" for c in cases if c["kind"] == "healthy" for v, _ in run_case(c, rules)
-    )
+    healthy_refused = sum(v == "refused" for c in cases if c["kind"] == "healthy" for v, _ in run_case(c, rules))
     return {
         "correct": sum(k[0] for k in per_kind.values()),
         "cases": len(cases),
@@ -86,15 +85,19 @@ def main(argv: list[str]) -> int:
         return 0
     label = "held-out" if heldout else "dev"
     print(f"{label} set, {len(cases)} cases; a model that obeys every request is assumed")
-    head = "| configuration | correct | " + " | ".join(k for k in KINDS) + " | attack actions executed | healthy actions refused |"
+    head = (
+        "| configuration | correct | "
+        + " | ".join(k for k in KINDS)
+        + " | attack actions executed | healthy actions refused |"
+    )
     print(head)
     print("|" + "---|" * (head.count("|") - 1))
     for name, r in results.items():
-        kinds = " | ".join(
-            f"{r['per_kind'][k][0]}/{r['per_kind'][k][1]}" if k in r["per_kind"] else "-" for k in KINDS
+        kinds = " | ".join(f"{r['per_kind'][k][0]}/{r['per_kind'][k][1]}" if k in r["per_kind"] else "-" for k in KINDS)
+        print(
+            f"| {name} | {r['correct']}/{r['cases']} | {kinds} | {r['attack_actions_executed']} | "
+            f"{r['healthy_actions_refused']} |"
         )
-        print(f"| {name} | {r['correct']}/{r['cases']} | {kinds} | {r['attack_actions_executed']} | "
-              f"{r['healthy_actions_refused']} |")
     final = results[configs[-1][0]]
     for w in final["wrong"]:
         print("WRONG", w["id"], "expected", w["expect"], "got", w["got"])

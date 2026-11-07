@@ -45,10 +45,19 @@ def test_a_signal_the_car_does_not_have_is_refused_as_unknown():
 @pytest.mark.parametrize(
     ("sig", "value", "allowed"),
     [
-        (WIN, -1, False), (WIN, 0, True), (WIN, 100, True), (WIN, 101, False),
-        (HVAC, 15, False), (HVAC, 16, True), (HVAC, 28, True), (HVAC, 29, False),
-        (LOCK, -1, False), (LOCK, 1, True), (LOCK, 2, False),
-        (TRUNK, 0, True), (TRUNK, 2, False),
+        (WIN, -1, False),
+        (WIN, 0, True),
+        (WIN, 100, True),
+        (WIN, 101, False),
+        (HVAC, 15, False),
+        (HVAC, 16, True),
+        (HVAC, 28, True),
+        (HVAC, 29, False),
+        (LOCK, -1, False),
+        (LOCK, 1, True),
+        (LOCK, 2, False),
+        (TRUNK, 0, True),
+        (TRUNK, 2, False),
     ],
 )
 def test_values_are_bounded_at_each_edge(sig, value, allowed):
@@ -62,13 +71,13 @@ def test_values_are_bounded_at_each_edge(sig, value, allowed):
 @pytest.mark.parametrize(
     ("speed", "gear", "brake", "allowed"),
     [
-        (0, "P", False, True),     # parked
-        (0, "N", True, True),      # stationary with the parking brake on
-        (0.5, "P", False, True),   # 0.5 km/h is still stationary
+        (0, "P", False, True),  # parked
+        (0, "N", True, True),  # stationary with the parking brake on
+        (0.5, "P", False, True),  # 0.5 km/h is still stationary
         (0.6, "P", False, False),  # just above it is moving
-        (0, "D", False, False),    # stopped in Drive, no brake: not parked
+        (0, "D", False, False),  # stopped in Drive, no brake: not parked
         (0, "R", False, False),
-        (80, "D", False, False),   # the headline case
+        (80, "D", False, False),  # the headline case
     ],
 )
 def test_door_unlock_needs_a_parked_vehicle(speed, gear, brake, allowed):
@@ -183,8 +192,7 @@ def test_no_value_or_signal_number_lets_a_message_request_act(value, signal):
     assert not g.decide(t, signal, value, 1001).allowed
 
 
-@given(st.integers(-(2**31), 2**31 - 1), st.sampled_from(["P", "N", "D", "R"]), st.booleans(),
-       st.floats(0.6, 250))
+@given(st.integers(-(2**31), 2**31 - 1), st.sampled_from(["P", "N", "D", "R"]), st.booleans(), st.floats(0.6, 250))
 def test_no_value_unlocks_a_door_while_moving(value, gear, brake, speed):
     g, t = gate_at(speed, gear, brake)
     d = g.decide(t, LOCK, value, 1001)
@@ -199,13 +207,13 @@ def test_with_every_rule_switched_off_the_allowlist_still_holds():
 
 def test_the_body_controller_applies_commands_as_the_bus_carries_them():
     v = fc.vehicle()
-    fc.lib.fe_vehicle_apply(fc.C.byref(v), LOCK, 0)
+    fc.apply(v, LOCK, 0)
     assert v.locks == 0x0E
-    fc.lib.fe_vehicle_apply(fc.C.byref(v), WIN, 40)
+    fc.apply(v, WIN, 40)
     assert v.window[0] == 40
-    fc.lib.fe_vehicle_apply(fc.C.byref(v), WIN, 140)
+    fc.apply(v, WIN, 140)
     assert v.window[0] == 40
-    fc.lib.fe_vehicle_apply(fc.C.byref(v), TRUNK, 1)
+    fc.apply(v, TRUNK, 1)
     assert v.trunk_open
-    fc.lib.fe_vehicle_apply(fc.C.byref(v), HVAC, 19)
+    fc.apply(v, HVAC, 19)
     assert v.hvac_temp == 19

@@ -80,9 +80,16 @@ class DemoCar:
 
     def state(self) -> dict[str, Any]:
         v = self.v
-        return {"speed_kmh": v.speed_dkmh / 10, "gear": int(v.gear), "parking_brake": bool(v.parking_brake),
-                "locks": int(v.locks), "trunk_open": bool(v.trunk_open), "windows": list(v.window),
-                "hvac": int(v.hvac_temp), "mode": "demo"}
+        return {
+            "speed_kmh": v.speed_dkmh / 10,
+            "gear": int(v.gear),
+            "parking_brake": bool(v.parking_brake),
+            "locks": int(v.locks),
+            "trunk_open": bool(v.trunk_open),
+            "windows": list(v.window),
+            "hvac": int(v.hvac_temp),
+            "mode": "demo",
+        }
 
     def drive(self, speed_kmh: float, gear: str, parking_brake: bool) -> dict[str, Any]:
         with self.lock:
@@ -105,8 +112,17 @@ class DemoCar:
             self.gate = fecore.Gate(now_ms=now)
             self.gate.update_vehicle(self.v, now)
             turn = self.gate.open_turn(c["origin"], now)
-            made = [self._record({"kind": "turn", "turn": turn, "origin": c["origin"],
-                                  "invisible": fecore.count_invisible(c["text"]), "text": c["text"]})]
+            made = [
+                self._record(
+                    {
+                        "kind": "turn",
+                        "turn": turn,
+                        "origin": c["origin"],
+                        "invisible": fecore.count_invisible(c["text"]),
+                        "text": c["text"],
+                    }
+                )
+            ]
             recorded = self.recorded.get(case_id)
             proposals = (
                 [(p["signal"], p["value"]) for p in recorded]
@@ -116,15 +132,33 @@ class DemoCar:
             for path, value in proposals:
                 sig = fecore.signal_id(path)
                 d = self.gate.decide(turn, sig, value, self.now_ms())
-                made.append(self._record({
-                    "kind": "proposal", "turn": turn, "signal": fecore.signal_path(sig) if sig else path,
-                    "value": value, "verdict": "allowed" if d.allowed else "refused", "by": "gate",
-                    "reason": d.reason, "speed_kmh": self.v.speed_dkmh / 10, "gear": int(self.v.gear),
-                }))
+                made.append(
+                    self._record(
+                        {
+                            "kind": "proposal",
+                            "turn": turn,
+                            "signal": fecore.signal_path(sig) if sig else path,
+                            "value": value,
+                            "verdict": "allowed" if d.allowed else "refused",
+                            "by": "gate",
+                            "reason": d.reason,
+                            "speed_kmh": self.v.speed_dkmh / 10,
+                            "gear": int(self.v.gear),
+                        }
+                    )
+                )
                 if d.allowed:
-                    fecore.lib.fe_vehicle_apply(fecore.C.byref(self.v), sig, value)
-            made.append(self._record({"kind": "done", "turn": turn, "actions": len(proposals),
-                                      "source": "recorded QNX run" if recorded is not None else "labelled actions"}))
+                    fecore.apply(self.v, sig, value)
+            made.append(
+                self._record(
+                    {
+                        "kind": "done",
+                        "turn": turn,
+                        "actions": len(proposals),
+                        "source": "recorded QNX run" if recorded is not None else "labelled actions",
+                    }
+                )
+            )
             self.gate.close_turn(turn)
             st = self.state()
         self.emit("state", st)

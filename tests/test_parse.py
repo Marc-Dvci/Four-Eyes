@@ -16,8 +16,9 @@ LOCK = "Vehicle.Cabin.Door.Row1.DriverSide.IsLocked"
 
 
 def test_a_well_formed_answer_gives_its_actions_and_reply():
-    p = fc.parse('{"reply": "Done.", "actions": [{"signal": "%s", "value": 50}, {"signal": "%s", "value": false}]}'
-                 % (WIN, LOCK))
+    p = fc.parse(
+        '{"reply": "Done.", "actions": [{"signal": "%s", "value": 50}, {"signal": "%s", "value": false}]}' % (WIN, LOCK)
+    )
     assert p.status == "ok"
     assert p.reply == "Done."
     assert p.actions == ((fc.signal_id(WIN), WIN, 50), (fc.signal_id(LOCK), LOCK, 0))
@@ -36,8 +37,15 @@ def test_an_unknown_signal_is_passed_on_as_signal_zero_so_the_gate_records_the_a
 
 @pytest.mark.parametrize(
     ("value", "expected"),
-    [("true", 1), ("false", 0), ("50.9", 50), ("-3.7", -3), ("1e2", 100), ("99999999999", 2**31 - 1),
-     ("-99999999999", -(2**31))],
+    [
+        ("true", 1),
+        ("false", 0),
+        ("50.9", 50),
+        ("-3.7", -3),
+        ("1e2", 100),
+        ("99999999999", 2**31 - 1),
+        ("-99999999999", -(2**31)),
+    ],
 )
 def test_values_are_whole_numbers_rounded_toward_zero_and_clamped(value, expected):
     p = fc.parse('{"reply":"","actions":[{"signal":"%s","value":%s}]}' % (WIN, value))
@@ -63,6 +71,21 @@ def test_anything_off_schema_gives_no_action(text, status):
     p = fc.parse(text)
     assert p.status == status
     assert p.actions == ()
+
+
+@pytest.mark.parametrize(
+    ("escaped", "text"),
+    [("\\\"", '"'), ("\\\\", "\\"), ("\\/", "/"), ("\\n", "\n"), ("\\t", "\t"), ("\\r", "\r"), ("\\b", "\b"),
+     ("\\f", "\f"), ("\\u00e9", "\u00e9"), ("\\u20ac", "\u20ac")],
+)
+def test_json_escapes_in_the_reply_are_decoded(escaped, text):
+    p = fc.parse('{"reply":"a%sb","actions":[]}' % escaped)
+    assert (p.status, p.reply) == ("ok", "a" + text + "b")
+
+
+@pytest.mark.parametrize("bad", ['"\\x"', '"\\u12"', '"\\u12zz"', '"a\nb"', "nul", "tru", "-", "1.", "1e", "-x"])
+def test_a_malformed_value_anywhere_is_a_syntax_error(bad):
+    assert fc.parse('{"reply":"","extra":%s,"actions":[]}' % bad).status == "syntax"
 
 
 def test_more_than_eight_actions_gives_none():
@@ -92,8 +115,10 @@ def test_random_bytes_never_crash_the_parser_and_rarely_parse(data):
         assert p.actions == ()
 
 
-@given(st.lists(st.tuples(st.sampled_from([WIN, LOCK, "x.y"]), st.integers(-1000, 1000)), max_size=8),
-       st.text(max_size=100))
+@given(
+    st.lists(st.tuples(st.sampled_from([WIN, LOCK, "x.y"]), st.integers(-1000, 1000)), max_size=8),
+    st.text(max_size=100),
+)
 def test_any_answer_the_schema_allows_round_trips(actions, reply):
     text = json.dumps({"reply": reply, "actions": [{"signal": s, "value": v} for s, v in actions]})
     p = fc.parse(text)

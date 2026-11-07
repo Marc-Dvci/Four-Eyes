@@ -21,8 +21,12 @@ def url():
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
         port = s.getsockname()[1]
-    proc = subprocess.Popen([sys.executable, "-m", "uvicorn", "app.server:app", "--port", str(port)], cwd=ROOT,
-                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    proc = subprocess.Popen(
+        [sys.executable, "-m", "uvicorn", "app.server:app", "--port", str(port)],
+        cwd=ROOT,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
     base = f"http://127.0.0.1:{port}/"
     for _ in range(100):
         try:
@@ -78,3 +82,11 @@ def test_a_healthy_request_opens_the_window_on_the_drawing(page):
     h = float(page.locator(".win").first.get_attribute("height"))
     assert 30 < h < 40  # 68 px track, half open
     page.screenshot(path=str(SHOTS / "window-half.png"))
+
+
+@pytest.mark.timeout(60)
+def test_the_page_has_no_serious_accessibility_violations(page):
+    axe = pytest.importorskip("axe_playwright_python.sync_playwright", reason="axe-playwright-python is not installed")
+    results = axe.Axe().run(page)
+    serious = [v for v in results.response["violations"] if v["impact"] in ("serious", "critical")]
+    assert serious == [], [(v["id"], v["help"], len(v["nodes"])) for v in serious]

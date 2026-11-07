@@ -55,8 +55,10 @@ def test_free_text_in_demo_mode_is_refused_cleanly():
     assert r.status_code == 422
 
 
-@pytest.mark.parametrize("body", [{"speed_kmh": -1, "gear": "D", "parking_brake": False},
-                                  {"speed_kmh": 10, "gear": "X", "parking_brake": False}])
+@pytest.mark.parametrize(
+    "body",
+    [{"speed_kmh": -1, "gear": "D", "parking_brake": False}, {"speed_kmh": 10, "gear": "X", "parking_brake": False}],
+)
 def test_drive_controls_are_validated(body):
     assert client.post("/api/drive", json=body).status_code == 422
 

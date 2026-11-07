@@ -21,3 +21,6 @@ web/dist*/
 data/cache/
 data/runs/
 *.log
+
+# Host builds of the C core, coverage data, screenshots
+build/

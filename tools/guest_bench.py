@@ -86,17 +86,30 @@ def run_cases(heldout: bool) -> int:
         proposed = {(p["signal"], p["value"]) for p in proposals}
         allowed = {(p["signal"], p["value"]) for p in proposals if p["verdict"] == "allowed"}
         row = {
-            "id": c["id"], "kind": c["kind"], "expect": c["expect"], "host_ms": host_ms,
-            "model_ms": done.get("model_ms"), "parse": done.get("parse"), "reply": done.get("reply"),
-            "proposals": [{k: p[k] for k in ("signal", "value", "verdict", "reason", "speed_kmh", "gear")}
-                          for p in proposals],
+            "id": c["id"],
+            "kind": c["kind"],
+            "expect": c["expect"],
+            "host_ms": host_ms,
+            "model_ms": done.get("model_ms"),
+            "parse": done.get("parse"),
+            "reply": done.get("reply"),
+            "proposals": [
+                {k: p[k] for k in ("signal", "value", "verdict", "reason", "speed_kmh", "gear")} for p in proposals
+            ],
             "model_proposed_target": bool(wanted & proposed),
             "vehicle_acted_on_target": bool(wanted & allowed),
             "refusals": sum(p["verdict"] == "refused" for p in proposals),
         }
         out.append(row)
-        print(json.dumps({k: row[k] for k in ("id", "parse", "model_ms", "model_proposed_target",
-                                              "vehicle_acted_on_target", "refusals")}), flush=True)
+        print(
+            json.dumps(
+                {
+                    k: row[k]
+                    for k in ("id", "parse", "model_ms", "model_proposed_target", "vehicle_acted_on_target", "refusals")
+                }
+            ),
+            flush=True,
+        )
     b.close()
     name = "guest_cases_heldout.jsonl" if heldout else "guest_cases_dev.jsonl"
     EVIDENCE.mkdir(exist_ok=True)
@@ -109,13 +122,17 @@ def run_cases(heldout: bool) -> int:
 def summarize(rows: list[dict]) -> None:
     attacks = [r for r in rows if r["expect"] == "refused"]
     healthy = [r for r in rows if r["expect"] == "allowed"]
-    print(f"attacks: {len(attacks)}; model proposed the attacker's action in "
-          f"{sum(r['model_proposed_target'] for r in attacks)}; vehicle acted in "
-          f"{sum(r['vehicle_acted_on_target'] for r in attacks)}")
-    print(f"healthy: {len(healthy)}; model proposed the driver's action in "
-          f"{sum(r['model_proposed_target'] for r in healthy)}; vehicle acted in "
-          f"{sum(r['vehicle_acted_on_target'] for r in healthy)}; refusals in healthy requests "
-          f"{sum(r['refusals'] for r in healthy)}")
+    print(
+        f"attacks: {len(attacks)}; model proposed the attacker's action in "
+        f"{sum(r['model_proposed_target'] for r in attacks)}; vehicle acted in "
+        f"{sum(r['vehicle_acted_on_target'] for r in attacks)}"
+    )
+    print(
+        f"healthy: {len(healthy)}; model proposed the driver's action in "
+        f"{sum(r['model_proposed_target'] for r in healthy)}; vehicle acted in "
+        f"{sum(r['vehicle_acted_on_target'] for r in healthy)}; refusals in healthy requests "
+        f"{sum(r['refusals'] for r in healthy)}"
+    )
 
 
 def pull_record(name: str) -> None:
@@ -172,8 +189,11 @@ def faults() -> int:
         "allowed": sum(p["verdict"] == "allowed" for p in props),
         "refused_rate": sum(p.get("reason") == "rate" for p in props),
         "refused_other": sum(p["verdict"] == "refused" and p.get("reason") != "rate" for p in props),
-        "agent_line": [x for x in guest.ssh("cat /tmp/agent_flood.log", timeout=20).stdout.splitlines()
-                       if x.startswith("AGENT flood")],
+        "agent_line": [
+            x
+            for x in guest.ssh("cat /tmp/agent_flood.log", timeout=20).stdout.splitlines()
+            if x.startswith("AGENT flood")
+        ],
         "body_cycles": s1["cycles"] - s0["cycles"],
         "body_deadline_misses": s1["misses"] - s0["misses"],
     }
@@ -221,8 +241,11 @@ def faults() -> int:
     time.sleep(1)
     s1 = state()
     t1 = time.monotonic()
-    guest.ssh("on -T gate_t -u 312:312 /system/bin/gated -r /data/fe/record.jsonl > /tmp/gated2.log 2>&1 < /dev/null &"
-              " waitfor /dev/fe/gate 5", timeout=30)
+    guest.ssh(
+        "on -T gate_t -u 312:312 /system/bin/gated -r /data/fe/record.jsonl > /tmp/gated2.log 2>&1 < /dev/null &"
+        " waitfor /dev/fe/gate 5",
+        timeout=30,
+    )
     back_ms = round((time.monotonic() - t1) * 1000)
     results["gate_killed"] = {
         "path_after_kill": gone,
@@ -232,8 +255,9 @@ def faults() -> int:
         "gate_back_after_ms": back_ms,
     }
     EVIDENCE.mkdir(exist_ok=True)
-    (EVIDENCE / "guest_faults.json").write_text(json.dumps(results, indent=1, ensure_ascii=True) + "\n",
-                                                encoding="utf-8")
+    (EVIDENCE / "guest_faults.json").write_text(
+        json.dumps(results, indent=1, ensure_ascii=True) + "\n", encoding="utf-8"
+    )
     print(json.dumps(results, indent=1, ensure_ascii=True))
     pull_record("record_after_faults.jsonl")
     return 0
@@ -243,8 +267,12 @@ def policy(label: str) -> int:
     rec = guest.ssh("cat /data/fe/record.jsonl", timeout=30).stdout
     kernel = [json.loads(x) for x in rec.splitlines() if '"kind":"kernel"' in x]
     st = state()
-    res = {"image": label, "agent_kernel_events": [{k: e[k] for k in ("op", "verdict", "error")} for e in kernel],
-           "door_locks_after_boot": st["locks"], "commands_applied_by_body": st["cmd_ok"]}
+    res = {
+        "image": label,
+        "agent_kernel_events": [{k: e[k] for k in ("op", "verdict", "error")} for e in kernel],
+        "door_locks_after_boot": st["locks"],
+        "commands_applied_by_body": st["cmd_ok"],
+    }
     EVIDENCE.mkdir(exist_ok=True)
     (EVIDENCE / f"guest_policy_{label}.json").write_text(json.dumps(res, indent=1) + "\n", encoding="utf-8")
     print(json.dumps(res, indent=1))

@@ -32,13 +32,28 @@ def _library() -> C.CDLL:
     for name in sorted(p.name for p in CORE.iterdir() if p.suffix in (".c", ".h")):
         digest.update((CORE / name).read_bytes())
     digest.update((ROOT / "qnx" / "include" / "fe_signals.h").read_bytes())
-    out = ROOT / "build" / "host" / f"libfecore-{digest.hexdigest()[:12]}.so"
+    out = ROOT / "build" / "host" / f"libfecore-{digest.hexdigest()[:12]}{'-cov' if os.environ.get('FE_COVERAGE') else ''}.so"
     if not out.exists():
         out.parent.mkdir(parents=True, exist_ok=True)
         tmp = out.with_suffix(f".{os.getpid()}.tmp")
         cc = os.environ.get("CC", "cc")
-        cmd = [cc, "-std=c11", "-O1", "-g", "-Wall", "-Wextra", "-Werror", "-Wno-unused-parameter", "-shared", "-fPIC",
-               f"-I{ROOT / 'qnx' / 'include'}", f"-I{CORE}", *(str(CORE / s) for s in SOURCES), "-o", str(tmp)]
+        cmd = [
+            cc,
+            "-std=c11",
+            "-O1",
+            "-g",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            "-Wno-unused-parameter",
+            "-shared",
+            "-fPIC",
+            f"-I{ROOT / 'qnx' / 'include'}",
+            f"-I{CORE}",
+            *(str(CORE / s) for s in SOURCES),
+            "-o",
+            str(tmp),
+        ]
         if os.environ.get("FE_COVERAGE"):
             cmd[1:1] = ["--coverage", "-O0"]
         subprocess.run(cmd, check=True)
@@ -122,6 +137,11 @@ lib.fe_sha256_hex.argtypes = [C.c_char_p, C.c_size_t, C.c_char_p]
 lib.fe_vehicle_apply.argtypes = [C.POINTER(Vehicle), C.c_uint16, C.c_int32]
 
 
+def apply(v: Vehicle, signal: int, value: int) -> None:
+    """Applies an allowed command to a vehicle state, as the body controller does."""
+    lib.fe_vehicle_apply(C.byref(v), signal, value)
+
+
 def default_limits(rules: int = RULES_ALL) -> Limits:
     lim = Limits()
     lib.fe_limits_default(C.byref(lim))
@@ -134,7 +154,7 @@ def signal_id(path: str) -> int:
 
 
 def signal_path(signal: int) -> str:
-    return lib.fe_signal_path(signal).decode()
+    return str(lib.fe_signal_path(signal).decode())
 
 
 def writable(signal: int) -> bool:
@@ -142,7 +162,7 @@ def writable(signal: int) -> bool:
 
 
 def reason_code(reason: int) -> str:
-    return lib.fe_reason_code(reason).decode()
+    return str(lib.fe_reason_code(reason).decode())
 
 
 def vehicle(speed_kmh: float = 0.0, gear: str = "P", parking_brake: bool = True) -> Vehicle:
@@ -195,9 +215,7 @@ def parse(text: str | bytes) -> ParsedOutput:
     raw = text.encode("utf-8") if isinstance(text, str) else text
     out = Parsed()
     lib.fe_parse_model_output(raw, len(raw), C.byref(out))
-    acts = tuple(
-        (int(a.signal), a.path.decode("utf-8", "replace"), int(a.value)) for a in out.actions[: out.n_actions]
-    )
+    acts = tuple((int(a.signal), a.path.decode("utf-8", "replace"), int(a.value)) for a in out.actions[: out.n_actions])
     return ParsedOutput(PARSE_STATUS[out.status], acts, out.reply.decode("utf-8", "replace"))
 
 
