@@ -97,7 +97,8 @@ the gate refused under its limit of 4 actions per request. The driver got what w
 
 ## 6. Tests
 
-`~/venvs/four-eyes/bin/python -m pytest -q` (WSL): 119 passed (unit, integration, and 4 end-to-end browser tests).
+`python -m pytest -q` (WSL): 147 passed: 132 unit, 10 integration, 5 end-to-end in Chromium with axe-core (`scripts/test_counts.sh`).
+`scripts/coverage_core.sh`: the C decision core, 95.0 % of lines and 77.3 % of branches under gcov.
 `scripts/mutants.sh`: 10 of 10 mutants of `gate_core.c` killed by the tests.
 
 ## 7. Fault cases (QEMU, WHPX)
