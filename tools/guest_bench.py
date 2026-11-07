@@ -11,6 +11,7 @@ ssh round trips, so they are upper bounds with tens of milliseconds of overhead,
 from __future__ import annotations
 
 import json
+import re
 import sys
 import time
 from pathlib import Path
@@ -21,12 +22,13 @@ sys.path.insert(0, str(ROOT / "tools"))
 
 import guest  # noqa: E402
 
-from app import fecore  # noqa: E402
 from app.bridge import GuestBridge  # noqa: E402
 from tools import fe_verify  # noqa: E402
 
 EVIDENCE = ROOT / "evidence"
 IMAGE = ROOT / ".guest"
+# The signal table, read from the core itself so this script runs on Windows without the compiled library.
+KNOWN = set(re.findall(r'"(Vehicle\.[A-Za-z0-9.]+)"', (ROOT / "qnx" / "core" / "gate_core.c").read_text()))
 AGENT = "on -T agent_t -u 313:313 /system/bin/agentd -m /data/models/agent.gguf -t 2"
 
 
@@ -62,7 +64,7 @@ def as_int(value: object) -> int:
 
 
 def key(signal: str, value: object) -> tuple[str, int]:
-    path = signal if fecore.signal_id(signal) else "unknown"
+    path = signal if signal in KNOWN else "unknown"
     return path, as_int(value)
 
 
