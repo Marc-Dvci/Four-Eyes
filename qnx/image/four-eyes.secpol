@@ -15,7 +15,8 @@
 #   - agent_t may connect to gate_t and to devb_t (the filesystem, to read its weights and libc++; Unix permissions
 #     keep it out of the gate's record directory) and nothing else, attaches nothing, and holds no spawn, fork,
 #     priority, network or physical-memory ability; with procnto -P 22 it cannot reach the body controller's 30;
-#   - of the fe_gate class, agent_t holds only propose and await, bridge_t only submit_turn and read.
+#   - of the fe_gate class, agent_t holds only propose and await, bridge_t only submit_turn and read, body_t only
+#     state: the gate takes vehicle state from body_t's messages alone, never from the bus.
 
 # WARNING: Generated rules include some which may represent system or component
 # design issues. Search for WARNING in the output.
@@ -86,6 +87,7 @@ class fe_gate {
     await
     submit_turn
     read
+    state
 };
 
 # === Rules for type agent_t ============
@@ -112,7 +114,11 @@ allow body_t self:ability {
     priority:0-30
     map_fixed
     public_channel
-    channel_connect:vcan_t
+    channel_connect:vcan_t,gate_t
+};
+# The body controller is the gate's only source of vehicle state.
+allow body_t gate_t:fe_gate {
+    state
 };
 
 # === Rules for type bridge_t ============
@@ -549,7 +555,8 @@ allow user_root_t self:ability {
 # itself holds none of them.
 allow user_root_t self:ability {
     gain_priv:
-        fe_gate:propose:gate_t, fe_gate:await:gate_t, fe_gate:submit_turn:gate_t, fe_gate:read:gate_t
+        fe_gate:propose:gate_t, fe_gate:await:gate_t, fe_gate:submit_turn:gate_t, fe_gate:read:gate_t,
+        fe_gate:state:gate_t
 };
 
 # === Rules for type vcan_t ============

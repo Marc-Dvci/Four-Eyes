@@ -1,13 +1,14 @@
 /*
  * bodyd: the simulated body controller. It owns the doors, windows, trunk and climate set point, and the simulated
- * driving state (speed, gear, parking brake), and puts both on the virtual CAN bus every 20 ms.
+ * driving state (speed, gear, parking brake), and puts both on the virtual CAN bus every 20 ms. It also sends the same
+ * state straight to the gate (FE_DCMD_STATE on /dev/fe/gate), which is the only state the gate acts on.
  *
  * It obeys COMMAND frames from the bus after checking their length, checksum, signal and range. It does not repeat the
  * gate's state rules: like many real body modules it trusts the bus, which is why who may write the bus matters.
  * The driver's own controls (speed, gear, parking brake) come from the head unit through /dev/fe/drive.
  * The 20 ms cycle runs at a priority the agent cannot reach; every late cycle is counted.
  *
- *   bodyd [-b bus] [-p drive_path] [-P priority]
+ *   bodyd [-b bus] [-p drive_path] [-P priority] [-g gate_path]
  *   write to /dev/fe/drive: "speed <km/h>", "gear P|R|N|D", "brake 0|1", "reset"
  *   read from /dev/fe/drive: one JSON line with the vehicle state and the cycle counters
  */
@@ -31,6 +32,7 @@ struct _iofunc_ocb;
 #include <sys/neutrino.h>
 #include <secpol/secpol.h>
 
+#include "fe_gate_msg.h"
 #include "fe_signals.h"
 #include "gate_core.h"
 
@@ -149,6 +151,54 @@ static void *commands(void *arg) {
     return NULL;
 }
 
+/* The gate's vehicle state, sent straight to the gate by message passing every cycle. Not on the bus: any node on the
+ * bus could send a state frame, but only this process's type may send FE_DCMD_STATE, and the kernel tells the gate
+ * which type sent each message. Runs at the default priority, apart from the 20 ms cycle, so a busy gate cannot make
+ * the cycle late; if the gate is not there yet, or restarts, it reconnects. */
+static const char *gate_path = FE_GATE_PATH;
+static uint64_t state_sent, state_failed;
+
+static void *report_state(void *arg) {
+    (void)arg;
+    int fd = -1;
+    struct timespec next;
+    clock_gettime(CLOCK_MONOTONIC, &next);
+    for (;;) {
+        next.tv_nsec += PERIOD_NS;
+        if (next.tv_nsec >= 1000000000L) {
+            next.tv_nsec -= 1000000000L;
+            next.tv_sec++;
+        }
+        clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &next, NULL);
+        if (fd < 0) {
+            fd = open(gate_path, O_RDWR);
+            if (fd < 0) continue;
+        }
+        fe_msg_state_t s;
+        memset(&s, 0, sizeof s);
+        pthread_mutex_lock(&mu);
+        s.speed_dkmh = veh.speed_dkmh;
+        s.gear = veh.gear;
+        s.parking_brake = veh.parking_brake;
+        s.locks = veh.locks;
+        s.trunk_open = veh.trunk_open;
+        memcpy(s.window, veh.window, sizeof s.window);
+        s.hvac_temp = veh.hvac_temp;
+        s.seq = (uint32_t)cycles;
+        pthread_mutex_unlock(&mu);
+        int r = devctl(fd, FE_DCMD_STATE, &s, sizeof s, NULL);
+        pthread_mutex_lock(&mu);
+        if (r == EOK) state_sent++;
+        else state_failed++;
+        pthread_mutex_unlock(&mu);
+        if (r != EOK && r != EINTR) {
+            close(fd);
+            fd = -1;
+        }
+    }
+    return NULL;
+}
+
 static int io_write(resmgr_context_t *ctp, io_write_t *msg, iofunc_ocb_t *ocb) {
     int st = iofunc_write_verify(ctp, msg, ocb, NULL);
     if (st != EOK) return st;
@@ -187,12 +237,14 @@ static int io_read(resmgr_context_t *ctp, io_read_t *msg, iofunc_ocb_t *ocb) {
     int n = snprintf(line, sizeof line,
                      "{\"speed_kmh\":%u.%u,\"gear\":%d,\"parking_brake\":%s,\"locks\":%u,\"trunk_open\":%s,"
                      "\"windows\":[%u,%u,%u,%u],\"hvac\":%d,\"cycles\":%llu,\"misses\":%llu,\"max_late_us\":%llu,"
-                     "\"cmd_ok\":%llu,\"cmd_rejected\":%llu,\"last_cmd_seq\":%llu}\n",
+                     "\"cmd_ok\":%llu,\"cmd_rejected\":%llu,\"last_cmd_seq\":%llu,\"state_sent\":%llu,"
+                     "\"state_failed\":%llu}\n",
                      veh.speed_dkmh / 10, veh.speed_dkmh % 10, veh.gear, veh.parking_brake ? "true" : "false",
                      veh.locks, veh.trunk_open ? "true" : "false", veh.window[0], veh.window[1], veh.window[2],
                      veh.window[3], veh.hvac_temp, (unsigned long long)cycles, (unsigned long long)misses,
                      (unsigned long long)max_late_us, (unsigned long long)cmd_ok, (unsigned long long)cmd_rejected,
-                     (unsigned long long)last_cmd_seq);
+                     (unsigned long long)last_cmd_seq, (unsigned long long)state_sent,
+                     (unsigned long long)state_failed);
     pthread_mutex_unlock(&mu);
     /* each read from offset 0 returns the whole current line; a read at a later offset is end of file, so both
      * cat and a reader polling with pread(.., 0) work */
@@ -213,12 +265,13 @@ static int io_read(resmgr_context_t *ctp, io_read_t *msg, iofunc_ocb_t *ocb) {
 int main(int argc, char **argv) {
     const char *bus = "/dev/vcan0", *path = "/dev/fe/drive";
     int prio = 30, opt;
-    while ((opt = getopt(argc, argv, "b:p:P:")) != -1) {
+    while ((opt = getopt(argc, argv, "b:p:P:g:")) != -1) {
         switch (opt) {
             case 'b': bus = optarg; break;
             case 'p': path = optarg; break;
             case 'P': prio = atoi(optarg); break;
-            default: fprintf(stderr, "usage: bodyd [-b bus] [-p path] [-P priority]\n"); return 2;
+            case 'g': gate_path = optarg; break;
+            default: fprintf(stderr, "usage: bodyd [-b bus] [-p path] [-P priority] [-g gate]\n"); return 2;
         }
     }
     reset_vehicle();
@@ -239,6 +292,8 @@ int main(int argc, char **argv) {
         pthread_create(&t1, NULL, cycle, NULL);
     }
     pthread_create(&t2, &pa, commands, NULL);
+    pthread_t t3;
+    pthread_create(&t3, NULL, report_state, NULL);
 
     dispatch_t *dpp = dispatch_create_channel(-1, DISPATCH_FLAG_NOLOCK);
     static resmgr_connect_funcs_t cfuncs;

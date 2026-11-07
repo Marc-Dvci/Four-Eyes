@@ -3,8 +3,9 @@
  *
  * It serves /dev/fe/gate as a resource manager. The head unit opens a request (a "turn") and labels where its text came
  * from; the agent waits for the request, asks its model, and proposes actions one by one; the gate judges each
- * proposal with the deterministic core in core/gate_core.c, against vehicle state it reads from /dev/vcan0 itself,
- * records the proposal and the verdict in a hash-chained record, and only then sends an allowed command on the bus.
+ * proposal with the deterministic core in core/gate_core.c, against vehicle state the body controller sends it
+ * directly (FE_DCMD_STATE, accepted only from the type the security policy names), records the proposal and the
+ * verdict in a hash-chained record, and only then sends an allowed command on the bus.
  *
  * Which client may send which command is asked of the security policy (class fe_gate) with secpol_check_permission(),
  * so the agent cannot open a request of its own, however it words its messages.
@@ -40,6 +41,8 @@ struct client;
 typedef struct client {
     iofunc_ocb_t ocb;
     int awaiting_rcvid; /* agent blocked in FE_DCMD_AWAIT */
+    bool state_source;  /* the kernel-named body controller sending FE_DCMD_STATE */
+    bool state_refusal_recorded;
 } client_t;
 
 static pthread_mutex_t mu = PTHREAD_MUTEX_INITIALIZER;
@@ -51,14 +54,15 @@ static client_t *awaiting; /* the one agent waiting for a request */
 static char turn_text[FE_TEXT_MAX];
 static uint32_t turn_text_len;
 static bool turn_pending; /* opened but not yet handed to the agent */
-static uint64_t frames_ok, frames_bad;
+static uint64_t frames_ok, frames_bad, bus_state_disagree, state_msgs;
 static iofunc_attr_t attr;
 
-static secpol_permission_t *perm_propose, *perm_await, *perm_submit, *perm_read;
+static secpol_permission_t *perm_propose, *perm_await, *perm_submit, *perm_read, *perm_state;
 
 /* The newest record lines, for FE_DCMD_READ. */
 #define RING_LINES 512
-#define REC_LINE_MAX 3072
+#define REC_LINE_MAX FE_RECORD_LINE_MAX
+_Static_assert(FE_TEXT_MAX <= FE_RECORD_TEXT_MAX, "the record must hold the longest request");
 static char ring[RING_LINES][REC_LINE_MAX];
 static uint64_t ring_seq[RING_LINES];
 
@@ -111,9 +115,11 @@ static void resume_chain(const char *path) {
 
 static void vehicle_members(char *out, size_t cap) {
     const fe_vehicle_t *v = &gate.vehicle;
-    snprintf(out, cap, "\"speed_kmh\":%u.%u,\"gear\":%d,\"parking_brake\":%s,\"state_age_ms\":%llu",
+    snprintf(out, cap,
+             "\"speed_kmh\":%u.%u,\"gear\":%d,\"parking_brake\":%s,\"state_age_ms\":%llu,\"bus_state_disagree\":%llu",
              v->speed_dkmh / 10, v->speed_dkmh % 10, v->gear, v->parking_brake ? "true" : "false",
-             gate.vehicle_known ? (unsigned long long)(now_ms() - gate.vehicle_ms) : 999999ull);
+             gate.vehicle_known ? (unsigned long long)(now_ms() - gate.vehicle_ms) : 999999ull,
+             (unsigned long long)bus_state_disagree);
 }
 
 static void send_command(uint16_t signal, int32_t value, uint64_t seq) {
@@ -131,11 +137,12 @@ static void send_command(uint16_t signal, int32_t value, uint64_t seq) {
         fprintf(stderr, "gated: bus write failed\n");
 }
 
-/* Reads vehicle state from the bus. The gate trusts only frames with the right identifier, length and checksum. */
+/* Listens to the bus but takes no authority from it. Any node allowed on the bus can put a state frame with a valid
+ * checksum there, and a checksum shows corruption, not authorship. The gate's vehicle state comes only from the body
+ * controller's FE_DCMD_STATE messages (do_state). State frames on the bus are counted, and counted again when they
+ * disagree with the body controller on gear, parking brake or speed by more than 2 km/h. */
 static void *bus_reader(void *arg) {
     (void)arg;
-    fe_vehicle_t v;
-    memset(&v, 0, sizeof v);
     for (;;) {
         CAN_MSG m;
         int r = devctl(bus_fd, CAN_DEVCTL_RX_FRAME_RAW_BLOCK, &m, sizeof m, NULL);
@@ -145,28 +152,18 @@ static void *bus_reader(void *arg) {
             sleep(1);
             continue;
         }
+        if (m.mid != FE_CAN_ID_STATE) continue;
         pthread_mutex_lock(&mu);
         if (m.len != 8 || fe_can_checksum(m.dat) != m.dat[7]) {
-            if (m.mid == FE_CAN_ID_STATE || m.mid == FE_CAN_ID_WINDOWS) frames_bad++;
-        } else if (m.mid == FE_CAN_ID_STATE) {
-            v = gate.vehicle;
-            v.speed_dkmh = (uint16_t)(m.dat[0] | (m.dat[1] << 8));
-            v.gear = (int8_t)m.dat[2];
-            v.parking_brake = m.dat[3] != 0;
-            v.locks = m.dat[4] & 0x0F;
-            v.trunk_open = m.dat[5] != 0;
-            fe_gate_update_vehicle(&gate, &v, now_ms());
+            frames_bad++;
+        } else {
             frames_ok++;
-        } else if (m.mid == FE_CAN_ID_WINDOWS) {
-            /* Windows and HVAC refresh the state but do not count as a fresh speed reading. */
-            uint64_t t = gate.vehicle_ms;
-            v = gate.vehicle;
-            memcpy(v.window, m.dat, 4);
-            v.hvac_temp = (int8_t)m.dat[4];
-            bool known = gate.vehicle_known;
-            fe_gate_update_vehicle(&gate, &v, t);
-            gate.vehicle_known = known;
-            frames_ok++;
+            int speed = m.dat[0] | (m.dat[1] << 8);
+            const fe_vehicle_t *v = &gate.vehicle;
+            int diff = speed - (int)v->speed_dkmh;
+            if (gate.vehicle_known && ((int8_t)m.dat[2] != v->gear || (m.dat[3] != 0) != v->parking_brake ||
+                                       diff > 20 || diff < -20))
+                bus_state_disagree++;
         }
         pthread_mutex_unlock(&mu);
     }
@@ -217,16 +214,19 @@ static int do_submit(resmgr_context_t *ctp, io_devctl_t *msg, void *data, size_t
     uint32_t len = t->text_len;
     if (len > FE_TEXT_MAX || offsetof(fe_msg_turn_t, text) + len > have) return EINVAL;
     fe_origin_t origin = t->origin == FE_ORIGIN_DRIVER ? FE_ORIGIN_DRIVER : FE_ORIGIN_MESSAGE;
-    static char esc[2001];
-    fe_json_escape(t->text, len, esc, sizeof esc);
     size_t invisible = fe_count_invisible(t->text, len);
     uint32_t id = fe_gate_open_turn(&gate, origin, now_ms());
+    static char m[REC_LINE_MAX];
+    if (fe_turn_members(id, fe_origin_name(origin), t->text, len, m, sizeof m) < 0) {
+        /* cannot happen for len <= FE_TEXT_MAX (the buffer is sized for the worst case); never record a cut text */
+        fe_gate_close_turn(&gate, id);
+        snprintf(m, sizeof m, "\"kind\":\"turn_refused\",\"turn\":%u,\"why\":\"record capacity\",\"bytes\":%u", id, len);
+        record(m);
+        return E2BIG;
+    }
     memcpy(turn_text, t->text, len);
     turn_text_len = len;
     turn_pending = true;
-    char m[REC_LINE_MAX];
-    snprintf(m, sizeof m, "\"kind\":\"turn\",\"turn\":%u,\"origin\":\"%s\",\"invisible\":%zu,\"text\":\"%s\"", id,
-             fe_origin_name(origin), invisible, esc);
     record(m);
     fe_msg_turn_reply_t *out = data;
     out->turn_id = id;
@@ -279,7 +279,7 @@ static int do_kernel(resmgr_context_t *ctp, void *data, size_t have) {
     fe_msg_kernel_t *k = data;
     k->path[sizeof k->path - 1] = '\0';
     k->op[sizeof k->op - 1] = '\0';
-    char p[200], o[100], m[600];
+    char p[FE_ESCAPED_MAX(sizeof k->path)], o[FE_ESCAPED_MAX(sizeof k->op)], m[1400];
     fe_json_escape(k->path, strlen(k->path), p, sizeof p);
     fe_json_escape(k->op, strlen(k->op), o, sizeof o);
     snprintf(m, sizeof m,
@@ -312,6 +312,39 @@ static int do_read(resmgr_context_t *ctp, io_devctl_t *msg, void *data, size_t h
     return reply_data(ctp, msg, offsetof(fe_msg_read_t, data) + used);
 }
 
+/* The body controller's state, every 20 ms. secpol_check_permission() looks up the sender's security type from the
+ * client information the kernel attached to this message, so a process of any other type is refused here however
+ * well formed its message is. The refusal is recorded once per connection, not 50 times a second. */
+static int do_state(resmgr_context_t *ctp, client_t *c, void *data, size_t have) {
+    if (!permitted(ctp, perm_state)) {
+        if (!c->state_refusal_recorded) {
+            c->state_refusal_recorded = true;
+            refuse_by_policy(ctp, "state");
+        }
+        return EPERM;
+    }
+    if (have < sizeof(fe_msg_state_t)) return EINVAL;
+    const fe_msg_state_t *s = data;
+    fe_vehicle_t v = gate.vehicle;
+    v.speed_dkmh = s->speed_dkmh;
+    v.gear = s->gear;
+    v.parking_brake = s->parking_brake != 0;
+    v.locks = s->locks & 0x0F;
+    v.trunk_open = s->trunk_open != 0;
+    memcpy(v.window, s->window, sizeof v.window);
+    v.hvac_temp = s->hvac_temp;
+    fe_gate_update_vehicle(&gate, &v, now_ms());
+    state_msgs++;
+    if (!c->state_source) {
+        c->state_source = true;
+        char m[200];
+        snprintf(m, sizeof m, "\"kind\":\"state_source\",\"by\":\"kernel\",\"client_pid\":%d,\"verdict\":\"permitted\"",
+                 ctp->info.pid);
+        record(m);
+    }
+    return EOK;
+}
+
 static int io_devctl(resmgr_context_t *ctp, io_devctl_t *msg, client_t *c) {
     int st = iofunc_devctl_default(ctp, msg, &c->ocb);
     if (st != _RESMGR_DEFAULT) return st;
@@ -326,6 +359,7 @@ static int io_devctl(resmgr_context_t *ctp, io_devctl_t *msg, client_t *c) {
         case FE_DCMD_DONE: r = do_done(ctp, data, have); break;
         case FE_DCMD_KERNEL: r = do_kernel(ctp, data, have); break;
         case FE_DCMD_READ: r = do_read(ctp, msg, data, have); break;
+        case FE_DCMD_STATE: r = do_state(ctp, c, data, have); break;
         case FE_DCMD_AWAIT:
             if (!permitted(ctp, perm_await)) {
                 r = refuse_by_policy(ctp, "await");
@@ -356,6 +390,15 @@ static int io_close_ocb(resmgr_context_t *ctp, void *reserved, client_t *c) {
     (void)reserved;
     pthread_mutex_lock(&mu);
     if (awaiting == c) awaiting = NULL;
+    if (c->state_source) {
+        /* The body controller closed its connection or died: the kernel closes its descriptors. From now on the
+         * vehicle state is unknown and every state-dependent action is refused until the body controller is back. */
+        gate.vehicle_known = false;
+        char m[200];
+        snprintf(m, sizeof m, "\"kind\":\"state_lost\",\"by\":\"gate\",\"state_messages\":%llu",
+                 (unsigned long long)state_msgs);
+        record(m);
+    }
     pthread_mutex_unlock(&mu);
     iofunc_ocb_detach(ctp, &c->ocb);
     free(c);
@@ -396,7 +439,8 @@ int main(int argc, char **argv) {
     perm_await = secpol_get_permission(NULL, "fe_gate", "await", 0);
     perm_submit = secpol_get_permission(NULL, "fe_gate", "submit_turn", 0);
     perm_read = secpol_get_permission(NULL, "fe_gate", "read", 0);
-    if (!perm_propose || !perm_await || !perm_submit || !perm_read) {
+    perm_state = secpol_get_permission(NULL, "fe_gate", "state", 0);
+    if (!perm_propose || !perm_await || !perm_submit || !perm_read || !perm_state) {
         fprintf(stderr, "gated: security policy class fe_gate not available: %s\n", strerror(errno));
         return 1;
     }

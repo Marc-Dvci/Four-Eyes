@@ -138,6 +138,8 @@ lib.fe_json_escape.restype = C.c_size_t
 lib.fe_json_escape.argtypes = [C.c_char_p, C.c_size_t, C.c_char_p, C.c_size_t]
 lib.fe_count_invisible.restype = C.c_size_t
 lib.fe_count_invisible.argtypes = [C.c_char_p, C.c_size_t]
+lib.fe_turn_members.restype = C.c_int
+lib.fe_turn_members.argtypes = [C.c_uint32, C.c_char_p, C.c_char_p, C.c_size_t, C.c_char_p, C.c_size_t]
 lib.fe_sha256_hex.argtypes = [C.c_char_p, C.c_size_t, C.c_char_p]
 lib.fe_vehicle_apply.argtypes = [C.POINTER(Vehicle), C.c_uint16, C.c_int32]
 
@@ -234,6 +236,18 @@ def json_escape(text: str | bytes, cap: int = 8192) -> str:
 def count_invisible(text: str | bytes) -> int:
     raw = text.encode("utf-8") if isinstance(text, str) else text
     return int(lib.fe_count_invisible(raw, len(raw)))
+
+
+RECORD_LINE_MAX = 8192  # FE_RECORD_LINE_MAX in record.h
+RECORD_TEXT_MAX = 1024  # FE_RECORD_TEXT_MAX
+
+
+def turn_members(turn_id: int, origin: str, text: str | bytes, cap: int = RECORD_LINE_MAX) -> str | None:
+    """The members of a "turn" record line, as gated writes them; None if they would not fit in cap."""
+    raw = text.encode("utf-8") if isinstance(text, str) else text
+    buf = C.create_string_buffer(cap)
+    n = lib.fe_turn_members(turn_id, origin.encode("ascii"), raw, len(raw), buf, cap)
+    return None if n < 0 else buf.value.decode("ascii")
 
 
 def sha256_hex(data: bytes) -> str:

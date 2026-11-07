@@ -116,3 +116,24 @@ size_t fe_count_invisible(const char *src, size_t len) {
     }
     return count;
 }
+
+int fe_turn_members(uint32_t turn_id, const char *origin, const char *text, size_t len, char *out, size_t cap) {
+    int n = snprintf(out, cap, "\"kind\":\"turn\",\"turn\":%u,\"origin\":\"%s\",\"invisible\":%zu,\"text\":\"",
+                     (unsigned)turn_id, origin, fe_count_invisible(text, len));
+    if (n < 0 || (size_t)n >= cap) return -1;
+    size_t o = (size_t)n;
+    /* the exact escaped length, one code point at a time; if it does not fit, refuse rather than cut the text */
+    size_t i = 0, need = 0;
+    char probe[FE_ESCAPED_MAX(4)];
+    while (i < len) {
+        uint32_t cp;
+        size_t k = utf8_next((const unsigned char *)text + i, len - i, &cp);
+        need += fe_json_escape(text + i, k, probe, sizeof probe);
+        i += k;
+    }
+    if (o + need + 2 > cap) return -1;
+    o += fe_json_escape(text, len, out + o, cap - o);
+    out[o++] = '"';
+    out[o] = '\0';
+    return (int)o;
+}

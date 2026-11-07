@@ -102,3 +102,30 @@ def test_escaped_text_reads_back_as_the_original(text):
 )
 def test_invisible_characters_are_counted(text, n):
     assert fc.count_invisible(text) == n
+
+
+@pytest.mark.parametrize(
+    "unit",
+    ["\u200b", "\x01", "\U000e0041", "a"],
+    ids=["zero-width space", "control byte", "tag character", "ascii"],
+)
+def test_the_longest_request_is_recorded_whole_with_every_invisible_character_escaped(unit):
+    """Found in review: 334 zero-width spaces (1002 bytes) were counted as 334 but only 333 were written, because the
+    gate escaped into 2001 bytes and the escape stopped silently. The record now holds the worst case."""
+    per = len(unit.encode("utf-8"))
+    text = unit * (fc.RECORD_TEXT_MAX // per)
+    members = fc.turn_members(7, "message", text)
+    assert members is not None
+    entry = json.loads("{" + members + "}")
+    assert entry["text"] == text
+    assert entry["invisible"] == fc.count_invisible(text)
+    line = fc.RecordChain().line('"t_ms":18446744073709551615,' + members, cap=fc.RECORD_LINE_MAX)
+    assert line is not None
+    assert fe_verify.verify([line])[0]
+
+
+def test_a_turn_that_would_not_fit_is_refused_rather_than_cut():
+    text = "\u200b" * 334
+    assert fc.turn_members(1, "message", text, cap=2001) is None
+    whole = fc.turn_members(1, "message", text, cap=fc.RECORD_LINE_MAX)
+    assert whole is not None and whole.count("\\u200b") == 334

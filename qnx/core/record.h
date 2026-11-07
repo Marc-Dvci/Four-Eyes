@@ -36,4 +36,18 @@ size_t fe_json_escape(const char *src, size_t len, char *dst, size_t cap);
 /* Counts the code points a reader cannot see: format characters, tag characters, zero-width and bidi controls. */
 size_t fe_count_invisible(const char *src, size_t len);
 
+/* fe_json_escape writes at most 6 bytes per input byte (a control byte or an invalid byte becomes \u00XX or \ufffd;
+ * 4-byte UTF-8 becomes a 12-byte surrogate pair), plus the NUL. A buffer of FE_ESCAPED_MAX(n) bytes never cuts n. */
+#define FE_ESCAPED_MAX(n) ((size_t)(n) * 6u + 1u)
+/* The longest request text the gate takes (FE_TEXT_MAX in fe_gate_msg.h must not exceed it). */
+#define FE_RECORD_TEXT_MAX 1024
+/* A record line holding the longest request, escaped, with room for t_ms, seq, prev and hash. */
+#define FE_RECORD_LINE_MAX 8192
+
+/*
+ * Formats the members of a "turn" line: id, origin, the number of invisible code points and the whole text, escaped.
+ * Returns the length written, or -1 if the members would not fit in cap. It never writes a shortened text.
+ */
+int fe_turn_members(uint32_t turn_id, const char *origin, const char *text, size_t len, char *out, size_t cap);
+
 #endif

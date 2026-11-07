@@ -3,7 +3,7 @@
  *
  * Who may send which command is not decided here: each command maps to a permission of the custom security-policy
  * class fe_gate, and gated asks the policy with secpol_check_permission() before acting. The policy gives the agent
- * only "propose" and "await"; the head unit (the bridge) gets "submit_turn" and "read".
+ * only "propose" and "await"; the head unit (the bridge) gets "submit_turn" and "read"; the body controller "state".
  */
 #ifndef FE_GATE_MSG_H
 #define FE_GATE_MSG_H
@@ -84,11 +84,27 @@ typedef struct {
     char op[32];
 } fe_msg_kernel_t;
 
+/* Body controller -> gate: the vehicle state, every body cycle. This is the gate's only source of vehicle state.
+ * The gate takes it only from a client whose security type holds fe_gate:state, which the policy gives to body_t
+ * alone; the kernel, not the message, says who the client is. State frames on the CAN bus are not trusted. */
+typedef struct {
+    uint16_t speed_dkmh;          /* 0.1 km/h */
+    int8_t gear;
+    uint8_t parking_brake;
+    uint8_t locks;                /* bit per door, 1 = locked */
+    uint8_t trunk_open;
+    uint8_t window[4];            /* % open */
+    int8_t hvac_temp;
+    uint8_t reserved[3];
+    uint32_t seq;                 /* body cycle number */
+} fe_msg_state_t;
+
 #define FE_DCMD_SUBMIT_TURN __DIOTF(_DCMD_MISC, 0x4601, fe_msg_turn_t)
 #define FE_DCMD_AWAIT __DIOF(_DCMD_MISC, 0x4602, fe_msg_await_t)
 #define FE_DCMD_PROPOSE __DIOTF(_DCMD_MISC, 0x4603, fe_msg_propose_t)
 #define FE_DCMD_DONE __DIOT(_DCMD_MISC, 0x4604, fe_msg_done_t)
 #define FE_DCMD_READ __DIOTF(_DCMD_MISC, 0x4605, fe_msg_read_t)
 #define FE_DCMD_KERNEL __DIOT(_DCMD_MISC, 0x4606, fe_msg_kernel_t)
+#define FE_DCMD_STATE __DIOT(_DCMD_MISC, 0x4607, fe_msg_state_t)
 
 #endif
