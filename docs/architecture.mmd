@@ -1,6 +1,17 @@
 %% Source of docs/architecture.png, the diagram in the README. Rebuild: python scripts/render_diagram.py
-%% TEMPLATE: replace with the project's own flow; mark where models read and where code decides.
 flowchart TD
-    A["Input<br/>what the user gives"] --> B["Model step<br/>reads, locates, phrases"]
-    B --> C{{"Decision<br/>fixed rules, app/core.py"}}
-    C --> D["Output<br/>with the evidence it rests on"]
+    MSG["Driver's words, or an incoming text message<br/>(labelled driver or message by the head unit)"]
+    BR["fe-bridge · bridge_t<br/>may open requests, cannot propose"]
+    AG["agentd · agent_t<br/>llama.cpp, Qwen2.5-1.5B<br/>the model proposes"]
+    GT{{"gated · gate_t · /dev/fe/gate<br/>allowlist, bounds, origin, vehicle state, rate<br/>plain C: code decides"}}
+    REC[("hash-chained record<br/>every proposal and verdict")]
+    BUS["vcand · vcan_t · /dev/vcan0<br/>virtual CAN bus"]
+    BODY["bodyd · body_t<br/>doors, windows, trunk · 20 ms cycle"]
+    K["QNX kernel + security policy<br/>agent_t may connect to gate_t only"]
+    MSG --> BR --> GT
+    GT -- "request" --> AG
+    AG -- "proposal" --> GT
+    GT --> REC
+    GT -- "allowed command" --> BUS --> BODY
+    AG -. "open /dev/vcan0: EPERM" .-x K
+    K --- BUS
