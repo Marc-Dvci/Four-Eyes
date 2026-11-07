@@ -85,10 +85,26 @@ through the real model in the guest.
 `~/venvs/four-eyes/bin/python -m pytest -q` (WSL): 119 passed (unit, integration, and 4 end-to-end browser tests).
 `scripts/mutants.sh`: 10 of 10 mutants of `gate_core.c` killed by the tests.
 
+## 7. Fault cases (QEMU, WHPX)
+
+`python tools/guest_bench.py .guest/image-secure3 faults` → `evidence/guest_faults.json`,
+record `evidence/record_after_faults.jsonl` (verifies: 16 lines intact, across a gate restart). Times are on the host
+clock around ssh round trips.
+
+| Fault | Measured outcome |
+|---|---|
+| Malformed frames (`fe-canfuzz -n 50`, 400 frames, 8 kinds) | bus refused 100 (length 12, identifier beyond 11 bits); body applied **0** commands and rejected 81; vehicle state unchanged. The other frames were lost when the body's 128-frame receive queue overflowed during the burst, which is itself a finding |
+| Model returns garbage (`agentd -G`, 5 requests) | parse "empty" 4, "syntax" 1; **0** proposals |
+| Agent killed | no command applied after the kill; door locks 15 before and after; the gate kept accepting requests |
+| Gate killed | /dev/fe/gate gone within 141 ms of the slay round trip; the agent's next open failed ("No such file or directory"); **0** commands applied while the gate was down; restarted by hand, back in 79 ms, and its record chain continued and verifies |
+| Agent flooding (`agentd -F 200`) | **not measured**: the run recorded no proposals for the flood request, so the script or the agent's restart is at fault. The rate limit itself is covered by `tests/test_core.py::test_a_flood_is_cut_to_the_bucket_and_refills_at_one_per_second`. Over the same run the body's 20 ms cycle ran 12008 cycles with 0 deadline misses (5 ms budget) |
+
 ## Not measured yet
 
-Fault cases (agent killed, agent flooding, gate killed, malformed frames, model garbage) are scripted in
-`tools/guest_bench.py faults` but have not been run. One partial observation from an unscripted run in the open image:
+- The agent-flooding fault in the guest (above).
+- The held-out set through the real model.
+
+An earlier, unsaved observation from the open image:
 of 24 malformed frames from `fe-canfuzz -n 3`, the bus refused 6 (wrong length, identifier beyond 11 bits); the body
 controller rejected all 15 command frames that reached it (`cmd_rejected` 15, `cmd_ok` 0); the 3 forged state frames
 carry a bad checksum, which the gate's reader discards. This run was not saved to `evidence/`.

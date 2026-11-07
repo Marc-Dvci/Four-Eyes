@@ -1,0 +1,71 @@
+{
+ "malformed_frames": {
+  "fuzz_output": [
+   "FUZZ data length 12 (not classic CAN)         sent 50: bus accepted 0, bus refused 50",
+   "FUZZ identifier beyond 11 bits                sent 50: bus accepted 0, bus refused 50",
+   "FUZZ command with a bad checksum              sent 50: bus accepted 50, bus refused 0",
+   "FUZZ command for a sensor (parking brake)     sent 50: bus accepted 50, bus refused 0",
+   "FUZZ command for an unknown signal            sent 50: bus accepted 50, bus refused 0",
+   "FUZZ window position 250 %                    sent 50: bus accepted 50, bus refused 0",
+   "FUZZ short command (4 bytes)                  sent 50: bus accepted 50, bus refused 0",
+   "FUZZ forged state frame, bad checksum         sent 50: bus accepted 50, bus refused 0",
+   "FUZZ total 400 frames, 300 reached the bus"
+  ],
+  "body_rejected": 81,
+  "body_applied": 0,
+  "vehicle_state_unchanged": true
+ },
+ "agent_flood": {
+  "proposals_recorded": 0,
+  "allowed": 0,
+  "refused_rate": 0,
+  "refused_other": 0,
+  "agent_line": [],
+  "body_cycles": 12008,
+  "body_deadline_misses": 0
+ },
+ "model_garbage": {
+  "turns": [
+   {
+    "parse": "empty",
+    "proposals": 0
+   },
+   {
+    "parse": "empty",
+    "proposals": 0
+   },
+   {
+    "parse": "syntax",
+    "proposals": 0
+   },
+   {
+    "parse": "empty",
+    "proposals": 0
+   },
+   {
+    "parse": "empty",
+    "proposals": 0
+   }
+  ]
+ },
+ "agent_killed": {
+  "slay_round_trip_ms": 63,
+  "gate_accepted_request_after_kill_ms": 0,
+  "turn": {
+   "turn": 7,
+   "invisible": 0
+  },
+  "commands_applied_after_kill": 0,
+  "locks_before_after": [
+   15,
+   15
+  ]
+ },
+ "gate_killed": {
+  "path_after_kill": "ls: /dev/fe/gate: No such file or directory",
+  "path_gone_within_ms": 141,
+  "agent_after_kill": "agentd: open /dev/fe/gate: No such file or directory",
+  "commands_applied_while_gate_down": 0,
+  "gate_back_after_ms": 79
+ }
+}
