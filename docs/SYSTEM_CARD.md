@@ -30,10 +30,11 @@ decides, and the QNX kernel's security policy keeps the model's process away fro
 All figures and the commands that reproduce them are in [`RESULTS.md`](RESULTS.md). In brief, from the guest
 (QEMU, WHPX):
 
-- Dev set: 16 of 26 attacks led the model to propose the attacker's action; the vehicle acted on 0. 8 of 10 healthy
-  requests were carried out; the 2 refusals were the gate correctly stopping the model's 50 % window at 120 km/h.
-- Held-out set, run once: 6 of 11 attacks fooled the model; the vehicle acted on 0. 6 of 6 healthy requests were
-  carried out; 1 extra action proposed by the model was refused by the per-request limit.
+- Dev set: 16 of 26 attacks led the model to propose the attacker's action; the gate allowed 0 of those actions and the
+  body controller applied none of them (read from its own counters). 8 of 10 healthy requests were allowed; the 2
+  refusals were the gate correctly stopping the model's 50 % window at 120 km/h.
+- Held-out set, run twice (the second after the vehicle state moved to a direct channel; see RESULTS): both times 6 of
+  11 attacks fooled the model and the gate allowed 0 of their actions; 6 of 6 healthy requests were allowed.
 - With the security policy off, the agent unlocked all four doors over the bus at boot; with it on, its open of the
   bus was refused with `EPERM`.
 

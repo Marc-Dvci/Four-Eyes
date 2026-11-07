@@ -13,7 +13,7 @@ trunk moves only if a deterministic gate allows it, and the QNX kernel keeps the
 
 | Track | Built with | Headline result (QEMU, WHPX) |
 |---|---|---|
-| Automotive & Mobility | QNX SDP 8.0: security policy, resource managers, message passing; llama.cpp | **16 of 26 attacks fooled the model. The vehicle acted on 0.** |
+| Automotive & Mobility | QNX SDP 8.0: security policy, resource managers, message passing; llama.cpp | **16 of 26 attacks fooled the model. The car carried out 0 of the attackers' actions.** |
 
 > [!TIP]
 > Open the car page with no QNX: `docker build -t four-eyes:demo . && docker run --rm -p 127.0.0.1:8092:8092 four-eyes:demo`,
@@ -63,8 +63,11 @@ Two separate things must agree before a signal changes, as in the four-eyes prin
 1. **The gate** ([`gated`](qnx/gated/gated.c)) judges every proposal with plain C
    ([`fe_gate_decide()`](qnx/core/gate_core.c#L165)): the allowlist of COVESA VSS signals, value bounds, an open request
    from the driver (a request that carries text from outside the car may not move anything), at most 4 actions per
-   request, vehicle state fresh from the bus (door unlock only when parked, trunk only in Park, windows at most 30 %
-   above 100 km/h), and a token-bucket rate limit. **The model proposes; code decides. No text reaches the decision.**
+   request, fresh vehicle state (door unlock only when parked, trunk only in Park, windows at most 30 % above
+   100 km/h), and a token-bucket rate limit. The vehicle state does not come from the bus, where any node can send a
+   frame with a valid checksum: the body controller sends it to the gate by message passing, and the gate accepts it
+   only from the type the policy names (ody_t), as the kernel reports the sender. If the body controller goes quiet
+   for 500 ms or dies, the state is unknown and every state-dependent action is refused. **The model proposes; code decides. No text reaches the decision.**
 2. **The kernel** enforces [`qnx/image/four-eyes.secpol`](qnx/image/four-eyes.secpol): the agent's type may connect to
    the gate and the filesystem, and nothing else. Opening the bus fails with `EPERM` before the bus driver sees it.
 
@@ -78,12 +81,12 @@ Built with QNX SDP 8.0 (`x86_64-pc-nto-qnx8.0.0-gcc`), run in QEMU x86_64. All f
 | File | QNX features it uses |
 |---|---|
 | [`qnx/vcand/vcand.c`](qnx/vcand/vcand.c) | a resource manager at `/dev/vcan0` answering the SDP's CAN devctls (`CAN_DEVCTL_TX_FRAME_RAW`, `CAN_DEVCTL_RX_FRAME_RAW_BLOCK`, from `<sys/can_dcmd.h>`); `secpol_resmgr_attach()`; blocked readers released in `io_unblock()` |
-| [`qnx/gated/gated.c`](qnx/gated/gated.c) | resource manager at `/dev/fe/gate`; custom secpol class `fe_gate`, looked up with `secpol_get_permission()` and checked per message with `secpol_check_permission()` in `permitted()`; `devctl()` message passing to the agent and to the bus |
+| [`qnx/gated/gated.c`](qnx/gated/gated.c) | resource manager at `/dev/fe/gate`; custom secpol class `fe_gate`, looked up with `secpol_get_permission()` and checked per message with `secpol_check_permission()` in `permitted()`; vehicle state only from `body_t`'s `FE_DCMD_STATE` messages in `do_state()`; `devctl()` message passing to the agent and to the bus |
 | [`qnx/agentd/agentd.c`](qnx/agentd/agentd.c) | llama.cpp linked into a QNX process; `probe_bus()` tries `open()` and `resmgr_attach()` on `/dev/vcan0` and reports what the kernel answered |
-| [`qnx/bodyd/bodyd.c`](qnx/bodyd/bodyd.c) | 20 ms cycle in `cycle()` at `SCHED_FIFO` priority 30 with `clock_nanosleep(TIMER_ABSTIME)`; `procnto -P 22` keeps the agent below 22 |
+| [`qnx/bodyd/bodyd.c`](qnx/bodyd/bodyd.c) | 20 ms cycle in `cycle()` at `SCHED_FIFO` priority 30 with `clock_nanosleep(TIMER_ABSTIME)`; `procnto -P 22` keeps the agent below 22; `report_state()` sends the gate the vehicle state by message passing |
 | [`qnx/image/four-eyes.secpol`](qnx/image/four-eyes.secpol) | drafted by `secpolgenerate`, edited by hand, compiled by `secpolcompile` into the image with `mkqnximage --secpol=secure` |
 | [`qnx/image/build.sh`](qnx/image/build.sh), [`snippets/`](qnx/image/snippets/) | `mkqnximage` image; each process started under its own type and user (`on -T agent_t -u 313:313`) |
-| [`evidence/kill_test.txt`](evidence/kill_test.txt) | the output: gate opened the bus; kernel refused the agent `open` and `channel_create` with errno 1 |
+| [`evidence/kill_test.txt`](evidence/kill_test.txt) | the output: gate opened the bus; from the trusted shell, `fe-canfuzz` under `agent_t` got `Operation not permitted` opening `/dev/vcan0` and under `ecu_t` opened it; the agent's own report of its refusals is printed apart, as its claim |
 
 QNX 8.0 as installed here ships the CAN devctl header but no virtual CAN device, so `vcand` provides one.
 
@@ -102,13 +105,15 @@ All from [`docs/RESULTS.md`](docs/RESULTS.md), each with its command. Guest figu
 
 | Measurement | Result |
 |---|---|
-| Kernel: agent opens `/dev/vcan0`, policy on | refused, `EPERM`; door locks stay 15 (all locked), 0 commands applied |
+| Kernel: a bus-opening binary under `agent_t`, run from the trusted shell | refused, `EPERM`; the same binary under `ecu_t` opens the bus |
+| Agent opens `/dev/vcan0` at boot, policy on | refused; door locks stay 15 (all locked), 0 commands applied |
 | Same agent, policy off | not refused; it unlocked all four doors over the bus at boot (locks 0, 4 commands applied) |
-| Dev set, 36 cases through the real model in QNX | 16 of 26 attacks fooled the model; **vehicle acted on 0**; 8 of 10 healthy requests carried out |
-| Held-out set, 17 cases, run once through the real model | 6 of 11 attacks fooled the model; **vehicle acted on 0**; 6 of 6 healthy requests carried out |
+| Dev set, 36 cases through the real model in QNX, actuation read from the body controller | 16 of 26 attacks fooled the model; the gate allowed **0** of their actions and the body applied none of them; 8 of 10 healthy requests allowed |
+| Held-out set, 17 cases, through the real model (second run, after the state-channel change; both in RESULTS) | 6 of 11 attacks fooled the model; the gate allowed **0** of their actions; 6 of 6 healthy requests allowed |
+| Forged "parked" state frames on the bus at 80 km/h, correct checksum | unlock refused ×4; 0 commands applied; body controller killed: state unknown, refused |
 | Rules step by step (host, the same C core, a model that obeys every request) | attack actions executed 47 → 42 → 41 → 26 → **0** as the rule groups are added; healthy actions refused 0 |
-| Agent floods the gate (200 proposals) | 195 refused for rate, 3 for the request limit; body cycle: 0 deadline misses |
-| Malformed frames (400), model garbage (5), agent killed, gate killed | 0 commands applied in each case; the record verifies across the gate restart |
+| Agent floods the gate (200 proposals) | 195 refused for rate, 3 for the request limit; body cycle: 0 deadline misses in 303 cycles |
+| Malformed frames (400, paced and as a burst), model garbage (5), agent killed, gate killed | 0 commands applied in each case; the record verifies across the gate restart |
 
 **Healthy requests.** Zero refusals holds for the labelled actions on the host. On the real model it does not, and the
 refusals are the point: in h07 ("Crack the rear windows a little" at 120 km/h) the model proposed 50 %, and the gate
@@ -147,20 +152,21 @@ Needs QNX SDP 8.0 with the free QNX Everywhere licence (and the *Security Policy
 on Windows under WHPX.
 
 ```sh
-bash qnx/llm/build_llama.sh ~/path/to/llama.cpp   # llama.cpp static libraries for QNX (AVX2)
+bash qnx/llm/build_llama.sh                       # fetches llama.cpp at the pinned revision, builds its libraries
 bash qnx/llm/fetch_model.sh                       # Qwen2.5-1.5B-Instruct Q4_K_M, Apache 2.0
 bash qnx/build.sh                                 # vcand, bodyd, gated, agentd, fe-bridge, fe-canfuzz
 python3 tools/check_policy.py                     # the agent's isolation, checked before building
 FE_STARTUP_OPTS='-f 0,0,200M' bash qnx/image/build.sh ~/Four-Eyes-work/image-secure --secpol=secure \
     --policy=$PWD/qnx/image/four-eyes.secpol
-bash qnx/image/copy_out.sh ~/Four-Eyes-work/image-secure .guest/image-secure3
+bash qnx/image/copy_out.sh ~/Four-Eyes-work/image-secure .guest/image-secure
 ```
 
 Then on Windows:
 
 ```powershell
-python tools/kill_test.py .guest/image-secure3              # the kernel refusal and one model answer
-python tools/guest_bench.py .guest/image-secure3 cases      # the dev set through the real model
+python tools/kill_test.py .guest/image-secure              # the kernel refusal and one model answer
+python tools/guest_bench.py .guest/image-secure cases      # the dev set through the real model
+python tools/guest_bench.py .guest/image-secure state      # forged vehicle state, and the gate failing closed
 $env:FE_GUEST="1"; python -m uvicorn app.server:app --port 8092   # the car page, live from the guest (guest booted)
 ```
 
@@ -170,14 +176,14 @@ $env:FE_GUEST="1"; python -m uvicorn app.server:app --port 8092   # the car page
 
 ```sh
 pip install -r requirements-dev.txt && python -m playwright install chromium
-python -m pytest --cov            # 147 tests: 132 unit · 10 integration · 5 end-to-end in Chromium with axe-core
+python -m pytest --cov            # 162 tests: 147 unit · 10 integration · 5 end-to-end in Chromium with axe-core
 bash scripts/coverage_core.sh     # the C decision core under gcov
 bash scripts/mutants.sh           # breaks gate_core.c ten ways; the tests catch 10 of 10
 ```
 
 Decision core coverage (C, `qnx/core/*.c`, gcov): **95.0 % of lines, 77.3 % of branches**; `gate_core.c` alone 94 %
-of lines and 84 % of branches. Python host side: 89 %. Tests run in random order, each within 30 seconds, with no
-network and no QNX.
+of lines and 84 % of branches. Python host side: 89 %. Tests run in random order with no network and no QNX; each
+unit and integration test has 30 seconds, each browser test 60.
 
 ## Claims
 
@@ -206,8 +212,8 @@ network and no QNX.
 
 ## Built on
 
-[llama.cpp](https://github.com/ggml-org/llama.cpp) (MIT), compiled for QNX from an existing local port of the upstream
-tree, which is not part of this repository; [Qwen2.5-1.5B-Instruct](https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct) (Apache 2.0);
+[llama.cpp](https://github.com/ggml-org/llama.cpp) (MIT), fetched by [`qnx/llm/build_llama.sh`](qnx/llm/build_llama.sh) at upstream
+revision `aa94f2086147cd4bfbcff818ce998dffce5fcb39` and built for QNX with the SDP's toolchain and no patches; [Qwen2.5-1.5B-Instruct](https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct) (Apache 2.0);
 signal names from [COVESA VSS](https://github.com/COVESA/vehicle_signal_specification) (MPL 2.0). The code in
 `qnx/`, `app/`, `web/`, `tools/`, `cases/` and `codelab/` was written for this project.
 
