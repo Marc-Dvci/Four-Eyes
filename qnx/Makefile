@@ -2,11 +2,12 @@
 #
 #   make -C qnx O=<build dir> LLAMA_BUILD=<llama.cpp build dir>
 #
-# The agent links llama.cpp's static libraries, built by llm/build_llama.sh.
+# The agent links llama.cpp's static libraries, built by llm/build_llama.sh at the revision pinned there.
 
 O ?= $(HOME)/Four-Eyes-work/build/x86_64
-LLAMA_SRC ?= $(HOME)/Four-Eyes-work/llama.cpp
-LLAMA_BUILD ?= $(HOME)/Four-Eyes-work/build/llama-qnx
+LLAMA_REV := aa94f2086
+LLAMA_SRC ?= $(HOME)/Four-Eyes-work/llama.cpp-$(LLAMA_REV)
+LLAMA_BUILD ?= $(HOME)/Four-Eyes-work/build/llama-qnx-$(LLAMA_REV)
 
 CC := $(QNX_HOST)/usr/bin/x86_64-pc-nto-qnx8.0.0-gcc
 CXX := $(QNX_HOST)/usr/bin/x86_64-pc-nto-qnx8.0.0-g++
