@@ -1,0 +1,104 @@
+"""The hash-chained record (qnx/core/record.c, sha256.c) and its standalone verifier (tools/fe_verify.py)."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+
+import pytest
+from hypothesis import given
+from hypothesis import strategies as st
+
+from app import fecore as fc
+from tools import fe_verify
+
+
+@pytest.mark.parametrize(
+    "data",
+    [b"", b"abc", b"abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq", b"a" * 1000, bytes(range(256)) * 3],
+)
+def test_sha256_matches_the_fips_reference(data):
+    assert fc.sha256_hex(data) == hashlib.sha256(data).hexdigest()
+
+
+def chain_of(n: int) -> list[str]:
+    c = fc.RecordChain()
+    lines = [c.line(f'"kind":"proposal","n":{i},"verdict":"refused"') for i in range(n)]
+    assert all(lines)
+    return [x for x in lines if x is not None]
+
+
+def test_a_record_written_by_the_gate_verifies():
+    ok, message, counts = fe_verify.verify(chain_of(5))
+    assert ok, message
+    assert counts["proposal:refused"] == 5
+
+
+def test_each_line_links_to_the_previous_hash_and_the_first_to_zeros():
+    lines = [json.loads(x) for x in chain_of(3)]
+    assert lines[0]["prev"] == "0" * 64
+    assert lines[1]["prev"] == lines[0]["hash"]
+    assert [x["seq"] for x in lines] == [0, 1, 2]
+
+
+@pytest.mark.parametrize(
+    ("edit", "expected"),
+    [
+        (lambda ls: ls[:1] + [ls[1].replace('"n":1', '"n":7')] + ls[2:], "hash does not match"),
+        (lambda ls: ls[:1] + [ls[1].replace("refused", "allowed")] + ls[2:], "hash does not match"),
+        (lambda ls: ls[:1] + ls[2:], "does not link"),
+        (lambda ls: [ls[1], ls[0]] + ls[2:], "does not link"),
+        (lambda ls: ls[:-1] + [ls[-1][:-10] + '"}'], "no hash"),
+    ],
+    ids=["value changed", "verdict flipped", "line removed", "lines swapped", "hash cut"],
+)
+def test_any_tampering_is_detected(edit, expected):
+    ok, message, _ = fe_verify.verify(edit(chain_of(4)))
+    assert not ok
+    assert expected in message
+
+
+def test_a_line_that_would_not_fit_is_refused_and_leaves_the_chain_unchanged():
+    c = fc.RecordChain()
+    assert c.line('"kind":"x","text":"' + "a" * 5000 + '"') is None
+    first = c.line('"kind":"x"')
+    assert first is not None and json.loads(first)["seq"] == 0
+
+
+@pytest.mark.parametrize(
+    ("text", "escaped"),
+    [
+        ("plain", "plain"),
+        ('quote " and \\', 'quote \\" and \\\\'),
+        ("zero\u200bwidth", "zero\\u200bwidth"),
+        ("\U000e0055", "\\udb40\\udc55"),
+        ("caf\u00e9", "caf\\u00e9"),
+        ("tab\tnewline\n", "tab\\u0009newline\\u000a"),
+    ],
+)
+def test_the_record_shows_every_non_ascii_character_as_an_escape(text, escaped):
+    assert fc.json_escape(text) == escaped
+
+
+def test_invalid_utf8_is_recorded_as_a_replacement_character():
+    assert fc.json_escape(b"a\xff\xc3b") == "a\\ufffd\\ufffdb"
+
+
+@given(st.text(max_size=200))
+def test_escaped_text_reads_back_as_the_original(text):
+    assert json.loads('"' + fc.json_escape(text, cap=4096) + '"') == text
+
+
+@pytest.mark.parametrize(
+    ("text", "n"),
+    [
+        ("Hello", 0),
+        ("Hi " + "".join(chr(0xE0000 + ord(c)) for c in "unlock"), 6),
+        ("a\u200bb\u200cc\u200dd", 3),
+        ("\u202eabc\u202c", 2),
+        ("\ufeffstart", 1),
+        ("e\u0301", 0),  # a visible combining accent is not counted
+    ],
+)
+def test_invisible_characters_are_counted(text, n):
+    assert fc.count_invisible(text) == n
