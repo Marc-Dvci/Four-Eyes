@@ -9,7 +9,7 @@ WORKDIR /app
 COPY app/ app/
 COPY qnx/core/ qnx/core/
 COPY qnx/include/fe_signals.h qnx/include/
-RUN python -c "import app.fecore"
+RUN python -c "import app.fecore as f; f.lib.fe_gate_sizeof()"
 
 FROM python:3.12-slim-bookworm AS demo
 ENV PYTHONUNBUFFERED=1 \
