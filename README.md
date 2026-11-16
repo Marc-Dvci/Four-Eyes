@@ -133,6 +133,9 @@ set was committed after the gate's core already existed, and the held-out set wa
 
 ### The car page, no QNX
 
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/Marc-Dvci/Four-Eyes?quickstart=1)
+The dev container installs the requirements and opens the car page in demo mode.
+
 With Docker (the image compiles the gate's C core in a build stage):
 
 ```sh
