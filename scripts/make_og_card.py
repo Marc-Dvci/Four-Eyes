@@ -1,4 +1,4 @@
-﻿"""Makes web/og-card.png (1200 x 630) from a real frame of the car page, docs/screens/unlock-80.png.
+"""Makes web/og-card.png (1200 x 630) from a real frame of the car page, docs/screens/unlock-80.png.
 
 The frame is cut just below the third decision, where its bar ends, so no line of text is cut; it is scaled to
 630 pixels high and the 40 pixels left and right are filled by repeating the page's own edge columns. Nothing is drawn

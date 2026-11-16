@@ -1,4 +1,4 @@
-﻿# Lock an AI agent inside a QNX security policy
+# Lock an AI agent inside a QNX security policy
 
 **QNX SDP 8.0 Â· x86_64 in QEMU Â· about 60 minutes Â· no hardware**
 
