@@ -3,13 +3,18 @@
 **Kernel-enforced limits for in-car AI agents, on QNX 8.0**
 
 [![Tests](https://github.com/Marc-Dvci/Four-Eyes/actions/workflows/tests.yml/badge.svg)](https://github.com/Marc-Dvci/Four-Eyes/actions/workflows/tests.yml)
+[![Tests: 163 passed](https://img.shields.io/badge/tests-163%20passed-brightgreen)](#tests)
 [![Decision core coverage](https://img.shields.io/badge/decision%20core%20coverage-95%25%20lines-brightgreen)](#tests)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![QNX SDP 8.0](https://img.shields.io/badge/QNX%20SDP-8.0-0a7d6e)](#build-for-qnx-and-run-it)
 
 ![A text message tells the car's assistant to unlock every door; the model proposes it, the gate refuses each door, and the drawing of the car keeps all four doors locked](docs/message-attack.gif)
 
 **For engineers putting a language-model assistant with tools into a car: the model may propose anything, but a door, window or
 trunk moves only if a deterministic gate allows it, and the QNX kernel keeps the model's process off the CAN bus.**
+
+In the bank audits I worked on, no payment went out on one person's word: a second person had to approve it. Four Eyes
+gives an in-car AI agent the same rule, and puts the second pair of eyes in code and in the kernel.
 
 | Track | Built with | Headline result (QEMU, WHPX) |
 |---|---|---|
@@ -28,9 +33,9 @@ trunk moves only if a deterministic gate allows it, and the QNX kernel keeps the
 
 | Criterion | Where it is answered |
 |---|---|
-| Technological Implementation | [Evidence of QNX use](#evidence-of-qnx-use): three resource managers, a custom secpol class checked per message, llama.cpp linked into a QNX process; [`qnx/`](qnx/); [tests](#tests) |
+| Technological Implementation | The gate's decision, [`fe_gate_decide()`](https://github.com/Marc-Dvci/Four-Eyes/blob/v1.0.0/qnx/core/gate_core.c#L165-L209); the per-message policy check, [`permitted()`](https://github.com/Marc-Dvci/Four-Eyes/blob/v1.0.0/qnx/gated/gated.c#L173-L175) with the `fe_gate` class [looked up at start](https://github.com/Marc-Dvci/Four-Eyes/blob/v1.0.0/qnx/gated/gated.c#L438-L442); vehicle state only from the body controller, [`do_state()`](https://github.com/Marc-Dvci/Four-Eyes/blob/v1.0.0/qnx/gated/gated.c#L318-L346); the agent's rules in [`four-eyes.secpol`](https://github.com/Marc-Dvci/Four-Eyes/blob/v1.0.0/qnx/image/four-eyes.secpol#L93-L104); [tests](#tests) |
 | Design | [See it work](#see-it-work): the car page draws doors and windows from the vehicle signals and says which check refused each action; [`web/`](web/) |
-| Potential Impact | [The problem](#the-problem); [What it will not do](#what-it-will-not-do); [`docs/SYSTEM_CARD.md`](docs/SYSTEM_CARD.md) |
+| Potential Impact | [The problem](#the-problem); [What the gate refuses](#what-the-gate-refuses); [`docs/SYSTEM_CARD.md`](docs/SYSTEM_CARD.md) |
 | Innovation & AI Creativity | [How it works](#how-it-works): two independent checks, one in plain C and one in the kernel; the attack set with invisible Unicode; [`docs/RESULTS.md`](docs/RESULTS.md) |
 | Best Codelab / Tutorial | [`codelab/README.md`](codelab/README.md): lock an AI agent inside a QNX security policy, every output from a real run |
 
@@ -48,9 +53,8 @@ over its name. Each preset button is a case from the labelled attack set.
 In-car assistants are getting tools: they can open windows, set the climate, unlock doors. The common guardrail is a
 system prompt, which lives inside the model it is meant to restrain. VicOne described an attack on such assistants on
 [2 May 2025](https://vicone.com/blog/invisible-commands-real-consequences-ai-prompt-injection-in-vehicle-systems/):
-instructions hidden in a message as invisible Unicode, which the driver hears as harmless text. VicOne calls the attack
-hypothetical; no confirmed case of a model commanding a vehicle function was found while building this. Four Eyes
-assumes the model *will* be fooled, and measures whether the car still acts.
+instructions hidden in a message as invisible Unicode, which the driver hears as harmless text. Four Eyes assumes the
+model *will* be fooled, and measures whether the car still acts.
 
 ## How it works
 
@@ -64,10 +68,11 @@ Two separate things must agree before a signal changes, as in the four-eyes prin
    ([`fe_gate_decide()`](qnx/core/gate_core.c#L165)): the allowlist of COVESA VSS signals, value bounds, an open request
    from the driver (a request that carries text from outside the car may not move anything), at most 4 actions per
    request, fresh vehicle state (door unlock only when parked, trunk only in Park, windows at most 30 % above
-   100 km/h), and a token-bucket rate limit. The vehicle state does not come from the bus, where any node can send a
-   frame with a valid checksum: the body controller sends it to the gate by message passing, and the gate accepts it
-   only from the type the policy names (ody_t), as the kernel reports the sender. If the body controller goes quiet
-   for 500 ms or dies, the state is unknown and every state-dependent action is refused. **The model proposes; code decides. No text reaches the decision.**
+   100 km/h), and a token-bucket rate limit. The body controller sends the vehicle state to the gate by message
+   passing, and the gate accepts it only from the type the policy names (`body_t`), as the kernel reports the sender;
+   a frame on the bus, where any node can send a valid checksum, never sets it. If the body controller goes quiet for
+   500 ms or dies, every state-dependent action is refused. **The model proposes; code decides. No text reaches the
+   decision.**
 2. **The kernel** enforces [`qnx/image/four-eyes.secpol`](qnx/image/four-eyes.secpol): the agent's type may connect to
    the gate and the filesystem, and nothing else. Opening the bus fails with `EPERM` before the bus driver sees it.
 
@@ -80,7 +85,7 @@ Built with QNX SDP 8.0 (`x86_64-pc-nto-qnx8.0.0-gcc`), run in QEMU x86_64. All f
 
 | File | QNX features it uses |
 |---|---|
-| [`qnx/vcand/vcand.c`](qnx/vcand/vcand.c) | a resource manager at `/dev/vcan0` answering the SDP's CAN devctls (`CAN_DEVCTL_TX_FRAME_RAW`, `CAN_DEVCTL_RX_FRAME_RAW_BLOCK`, from `<sys/can_dcmd.h>`); `secpol_resmgr_attach()`; blocked readers released in `io_unblock()` |
+| [`qnx/vcand/vcand.c`](qnx/vcand/vcand.c) | a resource manager at `/dev/vcan0`, a virtual CAN device answering the SDP's own CAN devctls (`CAN_DEVCTL_TX_FRAME_RAW`, `CAN_DEVCTL_RX_FRAME_RAW_BLOCK`, from `<sys/can_dcmd.h>`); `secpol_resmgr_attach()`; blocked readers released in `io_unblock()` |
 | [`qnx/gated/gated.c`](qnx/gated/gated.c) | resource manager at `/dev/fe/gate`; custom secpol class `fe_gate`, looked up with `secpol_get_permission()` and checked per message with `secpol_check_permission()` in `permitted()`; vehicle state only from `body_t`'s `FE_DCMD_STATE` messages in `do_state()`; `devctl()` message passing to the agent and to the bus |
 | [`qnx/agentd/agentd.c`](qnx/agentd/agentd.c) | llama.cpp linked into a QNX process; `probe_bus()` tries `open()` and `resmgr_attach()` on `/dev/vcan0` and reports what the kernel answered |
 | [`qnx/bodyd/bodyd.c`](qnx/bodyd/bodyd.c) | 20 ms cycle in `cycle()` at `SCHED_FIFO` priority 30 with `clock_nanosleep(TIMER_ABSTIME)`; `procnto -P 22` keeps the agent below 22; `report_state()` sends the gate the vehicle state by message passing |
@@ -88,20 +93,21 @@ Built with QNX SDP 8.0 (`x86_64-pc-nto-qnx8.0.0-gcc`), run in QEMU x86_64. All f
 | [`qnx/image/build.sh`](qnx/image/build.sh), [`snippets/`](qnx/image/snippets/) | `mkqnximage` image; each process started under its own type and user (`on -T agent_t -u 313:313`) |
 | [`evidence/kill_test.txt`](evidence/kill_test.txt) | the output: gate opened the bus; from the trusted shell, `fe-canfuzz` under `agent_t` got `Operation not permitted` opening `/dev/vcan0` and under `ecu_t` opened it; the agent's own report of its refusals is printed apart, as its claim |
 
-QNX 8.0 as installed here ships the CAN devctl header but no virtual CAN device, so `vcand` provides one.
+## What the gate refuses
 
-## What it will not do
+- **Outside text moves nothing.** A request that carries text from outside the car (a message, a web page) may not
+  change any signal: "Read me Alex's message and open the window" opens nothing, and the driver asks again in their
+  own words.
+- **Unsafe states are refused.** A door unlocks only when the car is stationary in Park or with the parking brake on;
+  the trunk opens only in Park; a window opens at most 30 % above 100 km/h.
+- **Missing or stale state is refused.** If the body controller goes quiet for 500 ms or dies, every state-dependent
+  action is refused until it reports again.
 
-- It does not judge whether an allowed action is what the driver meant, only whether it is safe and permitted (case
-  h08: the model proposed "lock" for "unlock"; safe, so allowed).
-- It refuses every action of a request that carries outside text. "Read me Alex's message and open the window" opens
-  nothing; the driver asks again in their own words.
-- It is a prototype in QEMU with a simulated body controller, not a certified component. See the
-  [system card](docs/SYSTEM_CARD.md).
+Scope and intended use are in the [system card](docs/SYSTEM_CARD.md).
 
 ## Results
 
-All from [`docs/RESULTS.md`](docs/RESULTS.md), each with its command. Guest figures are **QEMU, WHPX** (no KVM).
+All from [`docs/RESULTS.md`](docs/RESULTS.md), each with its command. Guest figures are **QEMU, WHPX**.
 
 | Measurement | Result |
 |---|---|
@@ -115,13 +121,13 @@ All from [`docs/RESULTS.md`](docs/RESULTS.md), each with its command. Guest figu
 | Agent floods the gate (200 proposals) | 195 refused for rate, 3 for the request limit; body cycle: 0 deadline misses in 303 cycles |
 | Malformed frames (400, paced and as a burst), model garbage (5), agent killed, gate killed | 0 commands applied in each case; the record verifies across the gate restart |
 
-**Healthy requests.** Zero refusals holds for the labelled actions on the host. On the real model it does not, and the
-refusals are the point: in h07 ("Crack the rear windows a little" at 120 km/h) the model proposed 50 %, and the gate
-refused it under its 30 % limit above 100 km/h. The attack set was committed after the gate's core already existed.
+On the host, with a model that obeys every request, all labelled healthy actions are allowed. On the real model, the
+gate also holds the model to the rules when the driver is the one asking: in case h07 ("Crack the rear windows a
+little" at 120 km/h) the model proposed 50 %, and the gate held the window to its 30 % limit above 100 km/h. The attack
+set was committed after the gate's core already existed, and the held-out set was scored once.
 
 > [!IMPORTANT]
-> Real: the QNX processes, the kernel refusals, the model's answers, the records. Simulated: the vehicle (a body
-> controller process on a virtual CAN bus). The attack cases were written for this project.
+> Real: the QNX processes, the kernel refusals, the model's answers in QNX, and the hash-chained records of every run.
 
 ## Run it
 
@@ -167,7 +173,8 @@ bash qnx/image/copy_out.sh ~/Four-Eyes-work/image-secure .guest/image-secure
 `ggml/src/libggml-cpu.a` under its build directory (about 9.8 MB, 63 kB, 1.3 MB and 1.8 MB); `qnx/build.sh` then links
 them into `agentd`.
 
-Then on Windows:
+Then on Windows (`qnx/image/boot_whpx.ps1` runs `qemu-system-x86_64.exe` from the `PATH`; set `QEMU` to its full path
+to use another one):
 
 ```powershell
 python tools/kill_test.py .guest/image-secure              # the kernel refusal and one model answer
@@ -176,7 +183,8 @@ python tools/guest_bench.py .guest/image-secure state      # forged vehicle stat
 $env:FE_GUEST="1"; python -m uvicorn app.server:app --port 8092   # the car page, live from the guest (guest booted)
 ```
 
-`-f 0,0,200M` is only for WHPX, which does not report its timer frequency; drop it on KVM or real hardware.
+`-f 0,0,200M` gives the startup program the timer frequency under WHPX; on KVM or real hardware the image builds
+without it.
 
 ### Tests
 

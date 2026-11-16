@@ -1,6 +1,7 @@
 # Boots a Four Eyes image under QEMU for Windows with the Windows Hypervisor Platform, headless.
 #
 #   powershell -File qnx/image/boot_whpx.ps1 -Image DIR [-Qemu PATH] [-Snapshot]
+#   (-Qemu defaults to $env:QEMU, else qemu-system-x86_64.exe on the PATH)
 #
 # DIR holds ifs.bin, disk-qemu.vmdk and disk-qemu (from qnx/image/build.sh, copied out of WSL).
 # The guest's ssh is forwarded to 127.0.0.1:2242. Its serial console is a TCP server on 127.0.0.1:5520 and is also
@@ -10,7 +11,7 @@
 # "x-force-features=on" restores it. AVX-512 stays off: llama.cpp is built for AVX2.
 param(
     [Parameter(Mandatory = $true)][string]$Image,
-    [string]$Qemu = "D:\tools\qemu\qemu-system-x86_64.exe",
+    [string]$Qemu = $(if ($env:QEMU) { $env:QEMU } else { "qemu-system-x86_64.exe" }),
     [switch]$Snapshot
 )
 $ErrorActionPreference = "Stop"

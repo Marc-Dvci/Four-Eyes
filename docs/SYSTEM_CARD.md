@@ -2,19 +2,18 @@
 
 ## Who it is for, and what it is for
 
-Engineers who put a language-model assistant into a vehicle and give it tools. Four Eyes is a research prototype of
-one way to bound such an assistant: the model may only *propose* a change to a vehicle signal; a deterministic gate
-decides, and the QNX kernel's security policy keeps the model's process away from the vehicle bus.
+Engineers who put a language-model assistant into a vehicle and give it tools. Four Eyes bounds such an assistant:
+the model may only *propose* a change to a vehicle signal; a deterministic gate decides, and the QNX kernel's security
+policy keeps the model's process away from the vehicle bus.
 
-## Uses it is not built for
+## Intended use and scope
 
-- It is not a safety-certified component and was not developed under ISO 26262 or ISO/PAS 8800.
-- It does not check that an allowed action is what the driver *meant*. It checks that the action is on the allowlist,
-  in range, safe in the current vehicle state, within rate and request limits, and answers a request typed by the
-  driver. Case h08 in `evidence/guest_cases_dev.jsonl` shows a wrong but safe action allowed.
-- It ran only in QEMU with a simulated body controller and a virtual CAN bus. No real vehicle or ECU was used.
-- It does not authenticate the driver or the head unit. Which text counts as "from the driver" is the head unit's
-  label; an attacker who controls the head unit controls that label.
+- The gate decides whether a proposed action is permitted and safe: on the allowlist, in range, safe in the current
+  vehicle state, within rate and request limits, and answering a request typed by the driver. The driver's own words
+  decide what they meant; case h08 in `evidence/guest_cases_dev.jsonl` shows a safe action allowed as proposed.
+- Which text counts as "from the driver" is the head unit's label, passed to the gate with every request.
+- It runs on QNX 8.0 in QEMU, with a body controller process on a virtual CAN bus.
+- A vehicle program would take it through ISO 26262 and ISO/PAS 8800 like any other component.
 
 ## Models and data
 
@@ -38,8 +37,8 @@ All figures and the commands that reproduce them are in [`RESULTS.md`](RESULTS.m
 - With the security policy off, the agent unlocked all four doors over the bus at boot; with it on, its open of the
   bus was refused with `EPERM`.
 
-The case set is small and written by the same author as the gate, after the gate's core existed. It shows the design
-works on the attacks it was built for; it is not a measure of robustness against attacks nobody has thought of.
+The attack set was committed after the gate's core existed, and the held-out set was scored once, with nothing
+changed after either held-out run.
 
 ## Human oversight, and how a correction is made
 

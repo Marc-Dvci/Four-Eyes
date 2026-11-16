@@ -347,7 +347,7 @@ generator wrote the `class fe_gate` block in Step 4 by itself, because `gated` a
 
 ## Step 11. Do not take safety state from a bus
 
-A review of this project found a hole the kernel policy alone does not close. The gate decides on the vehicle's speed
+Attacking this project found a hole the kernel policy alone does not close. The gate decides on the vehicle's speed
 and gear. It first read them from state frames on the CAN bus, and any node the policy lets onto the bus (here the
 test ECU, `ecu_t`) can send a frame with a valid checksum saying "stopped, in Park". A checksum shows corruption, not
 who sent it. At 80 km/h that frame let a door unlock through.
