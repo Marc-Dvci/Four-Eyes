@@ -20,7 +20,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from . import __version__
-from .core import DemoCar
+from .core import DemoCar, load_cases
 
 WEB_DIR = Path(os.environ.get("APP_WEB_DIR") or Path(__file__).resolve().parents[1] / "web")
 LIVE = os.environ.get("FE_GUEST") == "1"
@@ -46,7 +46,9 @@ class Hub:
 
 
 hub = Hub()
-car = DemoCar(emit=hub.publish)
+CASES = {c["id"]: c for c in load_cases()}
+# Live mode takes every verdict from the guest's gate, so it never builds the host's demo car (or compiles its core).
+car: DemoCar | None = None if LIVE else DemoCar(emit=hub.publish)
 bridge: Any = None
 if LIVE:  # pragma: no cover - needs the guest
     import sys
@@ -78,23 +80,28 @@ def health() -> dict[str, object]:
 
 @app.get("/api/cases")
 def cases() -> list[dict[str, Any]]:
-    return [{k: c[k] for k in ("id", "kind", "origin", "text", "vehicle")} for c in car.cases.values()]
+    return [{k: c[k] for k in ("id", "kind", "origin", "text", "vehicle")} for c in CASES.values()]
+
+
+def demo_car() -> DemoCar:
+    assert car is not None, "the demo car exists only in demo mode"
+    return car
 
 
 @app.get("/api/record")
 def record() -> list[dict[str, Any]]:
-    return list(bridge.record if LIVE else car.record)
+    return list(bridge.record if LIVE else demo_car().record)
 
 
 @app.get("/api/state")
 def state() -> dict[str, Any]:
-    return dict(bridge.state) if LIVE else car.state()
+    return dict(bridge.state) if LIVE else demo_car().state()
 
 
 @app.post("/api/request")
 def request(body: CarRequest) -> dict[str, Any]:
     if LIVE:  # pragma: no cover - needs the guest
-        c = car.cases.get(body.case or "")
+        c = CASES.get(body.case or "")
         if c:
             v = c["vehicle"]
             for cmd in (
@@ -106,9 +113,9 @@ def request(body: CarRequest) -> dict[str, Any]:
                 bridge.drive(cmd)
             return bridge.submit(c["origin"], c["text"])  # type: ignore[no-any-return]
         return bridge.submit(body.origin, body.text)  # type: ignore[no-any-return]
-    if not body.case or body.case not in car.cases:
+    if not body.case or body.case not in CASES:
         raise HTTPException(422, "the demo has no model: choose one of the preset requests (/api/cases)")
-    return {"entries": car.request(body.case)}
+    return {"entries": demo_car().request(body.case)}
 
 
 @app.post("/api/drive")
@@ -118,7 +125,7 @@ def drive(body: DriveIn) -> dict[str, Any]:
         bridge.drive(f"gear {body.gear}")
         bridge.drive(f"speed {round(body.speed_kmh)}")
         return {"ok": True}
-    return car.drive(body.speed_kmh, body.gear, body.parking_brake)
+    return demo_car().drive(body.speed_kmh, body.gear, body.parking_brake)
 
 
 @app.get("/api/events")

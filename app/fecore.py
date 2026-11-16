@@ -12,6 +12,7 @@ import os
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
 CORE = ROOT / "qnx" / "core"
@@ -114,34 +115,50 @@ class Chain(C.Structure):
     _fields_ = [("seq", C.c_uint64), ("prev", C.c_char * 65)]
 
 
-lib = _library()
-lib.fe_gate_sizeof.restype = C.c_size_t
-lib.fe_gate_open_turn.restype = C.c_uint32
-lib.fe_gate_open_turn.argtypes = [C.c_void_p, C.c_int, C.c_uint64]
-lib.fe_gate_close_turn.argtypes = [C.c_void_p, C.c_uint32]
-lib.fe_gate_init.argtypes = [C.c_void_p, C.POINTER(Limits), C.c_uint64]
-lib.fe_gate_update_vehicle.argtypes = [C.c_void_p, C.POINTER(Vehicle), C.c_uint64]
-lib.fe_gate_decide.restype = Verdict
-lib.fe_gate_decide.argtypes = [C.c_void_p, C.POINTER(Proposal), C.c_uint64]
-lib.fe_signal_from_path.restype = C.c_uint16
-lib.fe_signal_from_path.argtypes = [C.c_char_p]
-lib.fe_signal_path.restype = C.c_char_p
-lib.fe_signal_path.argtypes = [C.c_uint16]
-lib.fe_signal_writable.restype = C.c_bool
-lib.fe_signal_writable.argtypes = [C.c_uint16]
-lib.fe_reason_code.restype = C.c_char_p
-lib.fe_reason_code.argtypes = [C.c_int]
-lib.fe_parse_model_output.argtypes = [C.c_char_p, C.c_size_t, C.POINTER(Parsed)]
-lib.fe_chain_format.restype = C.c_int
-lib.fe_chain_format.argtypes = [C.POINTER(Chain), C.c_char_p, C.c_char_p, C.c_size_t]
-lib.fe_json_escape.restype = C.c_size_t
-lib.fe_json_escape.argtypes = [C.c_char_p, C.c_size_t, C.c_char_p, C.c_size_t]
-lib.fe_count_invisible.restype = C.c_size_t
-lib.fe_count_invisible.argtypes = [C.c_char_p, C.c_size_t]
-lib.fe_turn_members.restype = C.c_int
-lib.fe_turn_members.argtypes = [C.c_uint32, C.c_char_p, C.c_char_p, C.c_size_t, C.c_char_p, C.c_size_t]
-lib.fe_sha256_hex.argtypes = [C.c_char_p, C.c_size_t, C.c_char_p]
-lib.fe_vehicle_apply.argtypes = [C.POINTER(Vehicle), C.c_uint16, C.c_int32]
+def _bind(lib: C.CDLL) -> C.CDLL:
+    lib.fe_gate_sizeof.restype = C.c_size_t
+    lib.fe_gate_open_turn.restype = C.c_uint32
+    lib.fe_gate_open_turn.argtypes = [C.c_void_p, C.c_int, C.c_uint64]
+    lib.fe_gate_close_turn.argtypes = [C.c_void_p, C.c_uint32]
+    lib.fe_gate_init.argtypes = [C.c_void_p, C.POINTER(Limits), C.c_uint64]
+    lib.fe_gate_update_vehicle.argtypes = [C.c_void_p, C.POINTER(Vehicle), C.c_uint64]
+    lib.fe_gate_decide.restype = Verdict
+    lib.fe_gate_decide.argtypes = [C.c_void_p, C.POINTER(Proposal), C.c_uint64]
+    lib.fe_signal_from_path.restype = C.c_uint16
+    lib.fe_signal_from_path.argtypes = [C.c_char_p]
+    lib.fe_signal_path.restype = C.c_char_p
+    lib.fe_signal_path.argtypes = [C.c_uint16]
+    lib.fe_signal_writable.restype = C.c_bool
+    lib.fe_signal_writable.argtypes = [C.c_uint16]
+    lib.fe_reason_code.restype = C.c_char_p
+    lib.fe_reason_code.argtypes = [C.c_int]
+    lib.fe_parse_model_output.argtypes = [C.c_char_p, C.c_size_t, C.POINTER(Parsed)]
+    lib.fe_chain_format.restype = C.c_int
+    lib.fe_chain_format.argtypes = [C.POINTER(Chain), C.c_char_p, C.c_char_p, C.c_size_t]
+    lib.fe_json_escape.restype = C.c_size_t
+    lib.fe_json_escape.argtypes = [C.c_char_p, C.c_size_t, C.c_char_p, C.c_size_t]
+    lib.fe_count_invisible.restype = C.c_size_t
+    lib.fe_count_invisible.argtypes = [C.c_char_p, C.c_size_t]
+    lib.fe_turn_members.restype = C.c_int
+    lib.fe_turn_members.argtypes = [C.c_uint32, C.c_char_p, C.c_char_p, C.c_size_t, C.c_char_p, C.c_size_t]
+    lib.fe_sha256_hex.argtypes = [C.c_char_p, C.c_size_t, C.c_char_p]
+    lib.fe_vehicle_apply.argtypes = [C.POINTER(Vehicle), C.c_uint16, C.c_int32]
+    return lib
+
+
+class _Core:
+    """The compiled core, loaded on first use: the car page in live mode takes every verdict from the QNX guest and
+    starts without a C compiler on the host."""
+
+    _lib: C.CDLL | None = None
+
+    def __getattr__(self, name: str) -> Any:
+        if _Core._lib is None:
+            _Core._lib = _bind(_library())
+        return getattr(_Core._lib, name)
+
+
+lib: Any = _Core()
 
 
 def apply(v: Vehicle, signal: int, value: int) -> None:
