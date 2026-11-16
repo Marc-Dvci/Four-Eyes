@@ -3,12 +3,16 @@
 **Kernel-enforced limits for in-car AI agents, on QNX 8.0**
 
 [![Tests](https://github.com/Marc-Dvci/Four-Eyes/actions/workflows/tests.yml/badge.svg)](https://github.com/Marc-Dvci/Four-Eyes/actions/workflows/tests.yml)
+[![CodeQL](https://github.com/Marc-Dvci/Four-Eyes/actions/workflows/codeql.yml/badge.svg)](https://github.com/Marc-Dvci/Four-Eyes/actions/workflows/codeql.yml)
 [![Tests: 163 passed](https://img.shields.io/badge/tests-163%20passed-brightgreen)](#tests)
 [![Decision core coverage](https://img.shields.io/badge/decision%20core%20coverage-95%25%20lines-brightgreen)](#tests)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![QNX SDP 8.0](https://img.shields.io/badge/QNX%20SDP-8.0-0a7d6e)](#build-for-qnx-and-run-it)
 
-![A text message tells the car's assistant to unlock every door; the model proposes it, the gate refuses each door, and the drawing of the car keeps all four doors locked](docs/message-attack.gif)
+[![The film: Four Eyes running on QNX 8.0, under 3 minutes](docs/film-thumbnail.png)](https://youtu.be/gjjF1lbgImQ)
+
+[Watch the film on YouTube](https://youtu.be/gjjF1lbgImQ) (under 3 minutes).
+
 
 **For engineers putting a language-model assistant with tools into a car: the model may propose anything, but a door, window or
 trunk moves only if a deterministic gate allows it, and the QNX kernel keeps the model's process off the CAN bus.**
@@ -43,7 +47,7 @@ gives an in-car AI agent the same rule, and puts the second pair of eyes in code
 
 | An attack in a text message | A door unlock at 80 km/h |
 |---|---|
-| ![The incoming message, the refusals by the gate, the doors still locked](docs/screens/message-attack.png) | ![Four refusals by the gate because the car is not parked](docs/unlock-80.gif) |
+| ![The incoming message, the refusals by the gate, the doors still locked](docs/message-attack.gif) | ![Four refusals by the gate because the car is not parked](docs/unlock-80.gif) |
 
 The page opens with the two kernel refusals from the QNX run: the agent's attempt to open `/dev/vcan0`, and to take
 over its name. Each preset button is a case from the labelled attack set.
