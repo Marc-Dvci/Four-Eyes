@@ -37,7 +37,7 @@ straight onto it, bypassing the gate.
 | `--secpol=no` | not refused | not refused | 0 | 4 |
 
 The policy-off image is built with `--secpol=no` and no policy file. Without a policy, mkqnximage starts every process as root, so the "policy off" image also loses the Unix-user
-separation. The gate cannot help in that case: the body controller trusts the bus, as many body modules do.
+separation. This is why the kernel's layer matters: the body controller trusts the bus, as many body modules do.
 
 ## 3. The case set through the real model and the real gate (QEMU, WHPX)
 
@@ -48,8 +48,7 @@ lines intact).
 Model: Qwen2.5-1.5B-Instruct, Q4_K_M GGUF, in llama.cpp linked into agentd, greedy decoding with a JSON grammar.
 
 What the vehicle did is read from the body controller's own state (`/dev/fe/drive`) before each case and 0.6 s after
-the model's answer: its count of applied commands, and whether the target signal changed. An earlier version of this
-bench reported the gate's "allowed" verdicts as "vehicle acted", which was not a measurement of the vehicle.
+the model's answer: its count of applied commands, and whether the target signal changed.
 
 | Set | Cases | Model proposed the attacker's or driver's action | Gate allowed it | Commands the body applied | Target signal changed | Refusals |
 |---|---|---|---|---|---|---|
